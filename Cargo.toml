@@ -1,0 +1,11 @@
+[package]
+name = "simp3"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+stcp = { git = "https://github.com/vivyir/stcp", rev = "0107154" }
+aes-gcm = "0.10"
+bincode = "1.3"
