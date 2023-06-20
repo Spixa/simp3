@@ -2,40 +2,68 @@
 // then we will be integrating stcp into this
 
 
-use std::{io::{ErrorKind, Read, Write, self}, net::{TcpListener, TcpStream}, sync::mpsc::{self, TryRecvError}, thread, time::Duration};
+use std::{io::{ErrorKind, Read, Write, self}, net::{TcpStream}, sync::mpsc::{self, TryRecvError}, thread, time::Duration, process::exit};
+
+use aes_gcm::Aes256Gcm;
+use stcp::{bincode, AesPacket, StcpServer, client_kex};
 
 const LOCAL: &str = "127.0.0.1:37549";
-const MSG_SIZE: usize = 4096;
+const MSG_SIZE: usize = 16384;
 
 fn sleep() {
     thread::sleep(::std::time::Duration::from_millis(50));
 }
 
+struct Client(TcpStream, Aes256Gcm);
+
 fn server() {
 
-    let server = TcpListener::bind(LOCAL).expect("listener failed to bind");
+    println!("generating keypairs...");
+    let server = StcpServer::bind("0.0.0.0:37549").unwrap();
+    println!("server running on port 37549");
 
-    server.set_nonblocking(true).expect("failed to initialize non-blocking");
+    server.listener.set_nonblocking(true).expect("failed to initialize non-blocking");
 
-    let mut clients : Vec<TcpStream>= vec![];
+    let mut clients : Vec<Client>= vec![];
     
     let (tx, rx) = mpsc::channel::<String>();
 
     loop {
-        if let Ok((mut socket, addr)) = server.accept() {
+        if let Ok((mut socket, addr)) = server.listener.accept() {
             println!("{} connected", addr);
+            
+            let aes = server.kex_with_stream(&mut socket);
+            println!("KEX completed with {}", socket.peer_addr().unwrap());
 
             let _tx = tx.clone();
+            let mut _aes = aes.clone();
 
-            clients.push(socket.try_clone().expect("failed to clone client"));
+            clients.push(Client(socket.try_clone().expect("failed to clone client"), aes));
 
             thread::spawn(move || loop {
-                let mut buff = vec![0; MSG_SIZE];
+                //let mut buff = vec![0; MSG_SIZE];
+                let mut buff = [0 as u8; MSG_SIZE];
 
-                match socket.read_exact(&mut buff) {
-                    Ok(_) => {
-                        let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
-                        let msg = String::from_utf8(msg).expect("Invalid message");
+
+                match socket.read(&mut buff) {
+                    Ok(size) => {
+                        //let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
+
+                        let packet = bincode::deserialize::<AesPacket>(&buff[..size]);
+
+                        match packet {
+                            Ok(_) => {}
+                            Err(_) => {
+                                println!("closing connection with: {}", addr);
+                                break;
+                            }   
+                        }
+
+                        let packet = packet.unwrap();
+
+                        let decrypted_data = packet.decrypt(&mut _aes);
+
+                        let msg = String::from_utf8(decrypted_data).expect("Invalid message");
                     
                         println!("{}: {:?}", addr, msg);
                         _tx.send(msg).expect("Failed to send message");
@@ -55,9 +83,10 @@ fn server() {
 
         if let Ok(msg) = rx.try_recv() {
             clients = clients.into_iter().filter_map(|mut client| {
-                let mut buff = msg.clone().into_bytes();
-                buff.resize(MSG_SIZE, 0);
-                client.write_all(&buff).map(|_| client).ok()
+                let client_msg = msg.clone().into_bytes();
+                let reply = AesPacket::encrypt_to_bytes(&mut client.1, client_msg.to_vec());
+                
+                client.0.write(&reply).map(|_| client).ok()
             }).collect::<Vec<_>>();
         }
 
@@ -80,18 +109,36 @@ fn client() {
 
     let mut client = TcpStream::connect(ip).expect("Stream failed to connect");
 
-    client.set_nonblocking(true).expect("failed to initiate non-blocking");
+
+    let mut aes = client_kex(&mut client);
+    let mut _aes = aes.clone();
 
     let (tx, rx) = mpsc::channel::<String>();
 
-    thread::spawn(move || loop {
-        let mut buff = vec![0; MSG_SIZE];
+    client.set_nonblocking(true).expect("failed to initiate non-blocking");
 
-        match client.read_exact(&mut buff) {
-            Ok(_) => {
-                let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
-                println!("message recv: {:?}", msg);
-                match String::from_utf8(msg) {
+    thread::spawn(move || loop {
+        let mut buff = [0 as u8; MSG_SIZE];
+
+        match client.read(&mut buff) {
+            Ok(size) => {
+                let packet = bincode::deserialize::<AesPacket>(&buff[..size]);
+
+                match packet {
+                    Ok(_) => {},
+                    Err(_) => {
+                        println!("server went down");
+                        exit(0);
+                    }
+                }
+
+                let packet = packet.unwrap();
+
+                let decrypted_data = packet.decrypt(&mut aes);
+
+
+                println!("message recv: {:?}", decrypted_data);
+                match String::from_utf8(decrypted_data) {
                     Ok(str_msg) => println!("UTF-8: {}", str_msg),
                     Err(_) => println!("message is not UTF-8")
                 }
@@ -107,10 +154,11 @@ fn client() {
 
         match rx.try_recv() {
             Ok(msg) => {
-                let mut buff = msg.clone().into_bytes();
-                buff.resize(MSG_SIZE, 0);
-                client.write_all(&buff).expect("writing to socket failed");
-                println!("message sent {:?}", msg);
+                let buff = AesPacket::encrypt_to_bytes(&mut _aes, msg.into_bytes());
+                
+                client.write(&buff).expect("writing to socket failed");
+
+                println!("message sent");
             },
             Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => break,
@@ -123,9 +171,9 @@ fn client() {
     println!("Write a Message");
 
     loop {
-        let mut buff = String::new();
-        io::stdin().read_line(&mut buff).expect("reading from stdin failed");
-        let msg = buff.trim().to_string();
+        let mut sending = String::new();
+        io::stdin().read_line(&mut sending).expect("reading from stdin failed");
+        let msg = sending.trim().to_string();
         if msg == ":quit" || tx.send(msg).is_err() { break; }
     }
     println!("bye bye");
