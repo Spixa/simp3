@@ -1,73 +1,156 @@
-use std::{net::{Shutdown, TcpStream}, thread};
-use aes_gcm::Aes256Gcm;
-use stcp::{bincode, AesPacket, StcpServer};
-use std::io::{Write, Read};
+// for now i will be making an unencrypted one
+// then we will be integrating stcp into this
 
-// struct User {
-//     stream: TcpStream,
-//     name: String,
-//     op: bool
-// }
 
-fn handle_client(mut stream: TcpStream, mut aes_cipher: Aes256Gcm) {
-    let mut data = [0 as u8; 4_096];
+use std::{io::{ErrorKind, Read, Write, self}, net::{TcpListener, TcpStream}, sync::mpsc::{self, TryRecvError}, thread, time::Duration};
 
-    while match stream.read(&mut data) {
-        Ok(size) => {
-            let packet = bincode::deserialize::<AesPacket>(&data[..size]).unwrap();
-            let decrypted_data = packet.decrypt(&mut aes_cipher);
+const LOCAL: &str = "127.0.0.1:37549";
+const MSG_SIZE: usize = 4096;
 
-            let mut ddstr = String::from("");
-            match std::str::from_utf8(&decrypted_data) {
-                Ok(v) => {
-                        println!("{}: {} bytes", v, &data[0..size].len());
-                        ddstr = v.into();
+fn sleep() {
+    thread::sleep(::std::time::Duration::from_millis(50));
+}
+
+fn server() {
+
+    let server = TcpListener::bind(LOCAL).expect("listener failed to bind");
+
+    server.set_nonblocking(true).expect("failed to initialize non-blocking");
+
+    let mut clients : Vec<TcpStream>= vec![];
+    
+    let (tx, rx) = mpsc::channel::<String>();
+
+    loop {
+        if let Ok((mut socket, addr)) = server.accept() {
+            println!("{} connected", addr);
+
+            let _tx = tx.clone();
+
+            clients.push(socket.try_clone().expect("failed to clone client"));
+
+            thread::spawn(move || loop {
+                let mut buff = vec![0; MSG_SIZE];
+
+                match socket.read_exact(&mut buff) {
+                    Ok(_) => {
+                        let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
+                        let msg = String::from_utf8(msg).expect("Invalid message");
+                    
+                        println!("{}: {:?}", addr, msg);
+                        _tx.send(msg).expect("Failed to send message");
+                    },
+
+                    Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
+
+                    Err(_) => {
+                        println!("closing connection with: {}", addr);
+                        break;
                     }
-                Err(_) => {}
-            }
+                }
 
-            if ddstr == "close" {
-                // end thread and close the stream too
-                false
-            } else {
-                let reply = AesPacket::encrypt_to_bytes(&mut aes_cipher, b"\xff".to_vec());
-                stream.write(&reply).unwrap();
+                sleep();
+            });
+        }
 
-                // wait for response if any
-                true
+        if let Ok(msg) = rx.try_recv() {
+            clients = clients.into_iter().filter_map(|mut client| {
+                let mut buff = msg.clone().into_bytes();
+                buff.resize(MSG_SIZE, 0);
+                client.write_all(&buff).map(|_| client).ok()
+            }).collect::<Vec<_>>();
+        }
+
+        sleep();
+    }
+}
+
+fn client() {
+
+    let mut ip = ask("enter server IP: ");
+
+    match &ip.as_str() {
+        &"" => {
+            ip.clear();
+            ip.push_str(LOCAL);
+        }
+        &_ => {}
+    }
+
+
+    let mut client = TcpStream::connect(ip).expect("Stream failed to connect");
+
+    client.set_nonblocking(true).expect("failed to initiate non-blocking");
+
+    let (tx, rx) = mpsc::channel::<String>();
+
+    thread::spawn(move || loop {
+        let mut buff = vec![0; MSG_SIZE];
+
+        match client.read_exact(&mut buff) {
+            Ok(_) => {
+                let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
+                println!("message recv: {:?}", msg);
+                match String::from_utf8(msg) {
+                    Ok(str_msg) => println!("UTF-8: {}", str_msg),
+                    Err(_) => println!("message is not UTF-8")
+                }
+            },
+
+            Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
+
+            Err(_) => {
+                println!("connection with server was severed");
+                break;
             }
         }
-        Err(_) => {
-            println!(
-                "an error occured with connection {}",
-                stream.peer_addr().unwrap()
-            );
-            stream.shutdown(Shutdown::Both).unwrap();
-            false
+
+        match rx.try_recv() {
+            Ok(msg) => {
+                let mut buff = msg.clone().into_bytes();
+                buff.resize(MSG_SIZE, 0);
+                client.write_all(&buff).expect("writing to socket failed");
+                println!("message sent {:?}", msg);
+            },
+            Err(TryRecvError::Empty) => (),
+            Err(TryRecvError::Disconnected) => break,
+
         }
-    } {}
+
+        thread::sleep(Duration::from_micros(50));
+    });
+
+    println!("Write a Message");
+
+    loop {
+        let mut buff = String::new();
+        io::stdin().read_line(&mut buff).expect("reading from stdin failed");
+        let msg = buff.trim().to_string();
+        if msg == ":quit" || tx.send(msg).is_err() { break; }
+    }
+    println!("bye bye");
+}
+
+fn ask(prompt: &str) -> String {
+    print!("{}", prompt);
+    std::io::stdout()
+        .flush()
+        .unwrap();
+
+    let mut answer = String::new();
+    io::stdin()
+        .read_line(&mut answer)
+        .expect("failed to readline");
+    answer.trim().to_lowercase().into()
 }
 
 fn main() {
-    let simp = StcpServer::bind("0.0.0.0:37549").unwrap();
-    println!("simp v3 is listening on port 37549");
 
-    // the code here runs once per client
-    for stream in simp.listener.incoming() {
-        match stream {
-            Ok(mut stream) => {
-                println!("New connection: {}", stream.peer_addr().unwrap());
-                let aes = simp.kex_with_stream(&mut stream);
-                println!("KEX completed with {}", stream.peer_addr().unwrap());
+    let answer = ask("server or client: ");
 
-                thread::spawn(move || {
-                // start the handle_client loop for the client
-                    handle_client(stream, aes);
-                });
-                }
-            Err(e) => {
-                println!("New connection error: {}", e);
-            }
-        }
+    match answer.as_str() {
+        "server" => server(),
+        "client" => client(),
+        &_ => println!("invalid answer: type server or client")
     }
 }
