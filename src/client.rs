@@ -1,9 +1,18 @@
-use std::{io::{ErrorKind, Read, Write, self}, net::{TcpStream}, sync::mpsc::{self, TryRecvError}, thread, time::Duration, process::exit};
-use stcp::{bincode, AesPacket, client_kex};
-use crate::{types::{MSG_SIZE, LOCAL}, util::ask};
+use crate::{
+    types::{LOCAL, MSG_SIZE},
+    util::ask,
+};
+use stcp::{bincode, client_kex, AesPacket};
+use std::{
+    io::{self, ErrorKind, Read, Write},
+    net::TcpStream,
+    process::exit,
+    sync::mpsc::{self, TryRecvError},
+    thread,
+    time::Duration,
+};
 
 pub fn client() {
-
     let mut ip = ask("enter server IP: ");
 
     if ip.as_str() == "" {
@@ -17,7 +26,9 @@ pub fn client() {
 
     let (tx, rx) = mpsc::channel::<String>();
 
-    client.set_nonblocking(true).expect("failed to initiate non-blocking");
+    client
+        .set_nonblocking(true)
+        .expect("failed to initiate non-blocking");
 
     thread::spawn(move || loop {
         let mut buff = [0_u8; MSG_SIZE];
@@ -27,7 +38,7 @@ pub fn client() {
                 let packet = bincode::deserialize::<AesPacket>(&buff[..size]);
 
                 match packet {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(_) => {
                         println!("server went down");
                         exit(0);
@@ -38,13 +49,12 @@ pub fn client() {
 
                 let decrypted_data = packet.decrypt(&mut aes);
 
-
                 println!("message recv: {:?}", decrypted_data);
                 match String::from_utf8(decrypted_data) {
                     Ok(str_msg) => println!("UTF-8: {}", str_msg),
-                    Err(_) => println!("message is not UTF-8")
+                    Err(_) => println!("message is not UTF-8"),
                 }
-            },
+            }
 
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
 
@@ -57,14 +67,13 @@ pub fn client() {
         match rx.try_recv() {
             Ok(msg) => {
                 let buff = AesPacket::encrypt_to_bytes(&mut _aes, msg.into_bytes());
-                
+
                 client.write_all(&buff).expect("writing to socket failed");
 
                 println!("message sent");
-            },
+            }
             Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => break,
-
         }
 
         thread::sleep(Duration::from_micros(50));
@@ -74,9 +83,13 @@ pub fn client() {
 
     loop {
         let mut sending = String::new();
-        io::stdin().read_line(&mut sending).expect("reading from stdin failed");
+        io::stdin()
+            .read_line(&mut sending)
+            .expect("reading from stdin failed");
         let msg = sending.trim().to_string();
-        if msg == ":quit" || tx.send(msg).is_err() { break; }
+        if msg == ":quit" || tx.send(msg).is_err() {
+            break;
+        }
     }
     println!("bye bye");
 }
