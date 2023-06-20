@@ -1,2 +1,0 @@
-- add basic key exchange
-- make user struct
