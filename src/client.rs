@@ -1,5 +1,6 @@
 use crate::{
-    types::{LOCAL, MSG_SIZE},
+    net::{decode_packet, encode_packet},
+    types::{Mode, Packet, LOCAL, MSG_SIZE},
     util::ask,
 };
 use stcp::{bincode, client_kex, AesPacket};
@@ -39,8 +40,9 @@ pub fn client() {
 
                 match packet {
                     Ok(_) => {}
-                    Err(_) => {
+                    Err(e) => {
                         println!("server went down");
+                        println!("error: {e}");
                         exit(0);
                     }
                 }
@@ -49,10 +51,22 @@ pub fn client() {
 
                 let decrypted_data = packet.decrypt(&mut aes);
 
-                println!("message recv: {:?}", decrypted_data);
-                match String::from_utf8(decrypted_data) {
-                    Ok(str_msg) => println!("UTF-8: {}", str_msg),
-                    Err(_) => println!("message is not UTF-8"),
+                let packet = decode_packet(&decrypted_data, Mode::Client);
+
+                // println!("message recv: {:?}", decrypted_data);
+                // match String::from_utf8(decrypted_data) {
+                //     Ok(str_msg) => println!("UTF-8: {}", str_msg),
+                //     Err(_) => println!("message is not UTF-8"),
+                // }
+
+                match packet {
+                    Packet::Message(content, username) => println!("{}: {}", username, content),
+                    Packet::Join(username) => println!("{} joined", username),
+                    Packet::Leave(username) => println!("{} left", username),
+                    Packet::ClientRespone(response) => {
+                        println!("Your previous command returned: {}", response)
+                    }
+                    _ => panic!("Recv Illegal packet"),
                 }
             }
 
@@ -66,9 +80,17 @@ pub fn client() {
 
         match rx.try_recv() {
             Ok(msg) => {
-                let buff = AesPacket::encrypt_to_bytes(&mut _aes, msg.into_bytes());
+                let packet;
+                if msg.starts_with("/") {
+                    packet = Packet::ServerCommand(msg);
+                } else {
+                    packet = Packet::ClientMessage(msg);
+                }
 
-                client.write_all(&buff).expect("writing to socket failed");
+                let buf = encode_packet(packet);
+                let enc = AesPacket::encrypt_to_bytes(&mut _aes, buf);
+
+                client.write_all(&enc).expect("writing to socket failed");
 
                 println!("message sent");
             }
