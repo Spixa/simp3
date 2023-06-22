@@ -7,13 +7,20 @@ pub const MSG_SIZE: usize = 16384;
 
 pub struct Client(pub TcpStream, pub Aes256Gcm);
 
-// pub type EncryptedPacket = Vec<u8>;
+#[derive(Debug)]
+pub enum Packet {
+    Message(String, String),
+    ClientMessage(String),
+    Join(String),
+    Leave(String),
+    ServerCommand(String),
+    ClientRespone(String),
+    Illegal,
+}
 
-// pub enum Packet {
-//     Message(String, String),
-//     Join(String),
-//     Leave(String),
-//     ServerCommand(String),
-//     ClientRespone(String),
-//     Ping(u32),
-// }
+// pub struct OwnedPacket<'a>(pub Packet, pub &'a Client);
+
+pub enum Mode {
+    Client,
+    Server,
+}

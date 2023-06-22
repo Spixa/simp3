@@ -1,5 +1,6 @@
 use crate::{
-    types::{Client, MSG_SIZE},
+    net::{decode_packet, encode_packet},
+    types::{Client, Mode, Packet, MSG_SIZE},
     util::sleep,
 };
 use stcp::{bincode, AesPacket, StcpServer};
@@ -21,7 +22,7 @@ pub fn server() {
 
     let mut clients: Vec<Client> = vec![];
 
-    let (tx, rx) = mpsc::channel::<String>();
+    let (tx, rx) = mpsc::channel::<Packet>();
 
     loop {
         if let Ok((mut socket, addr)) = server.listener.accept() {
@@ -46,30 +47,23 @@ pub fn server() {
                     Ok(size) => {
                         //let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
 
-                        let packet = bincode::deserialize::<AesPacket>(&buff[..size]);
+                        let packet = if !buff[..size].is_empty() {
+                            let enc = bincode::deserialize::<AesPacket>(&buff[..size]).unwrap(); // NOTE: unwrap
+                            let dec = enc.decrypt(&mut _aes);
+                            decode_packet(&dec, Mode::Server) // NOTE: implicit return
+                        } else {
+                            Packet::Illegal
+                        };
 
-                        match packet {
-                            Ok(_) => {}
-                            Err(_) => {
-                                println!("closing connection with: {}", addr);
-                                break;
-                            }
-                        }
+                        println!("{:?}", packet);
 
-                        let packet = packet.unwrap();
-
-                        let decrypted_data = packet.decrypt(&mut _aes);
-
-                        let msg = String::from_utf8(decrypted_data).expect("Invalid message");
-
-                        println!("{}: {:?}", addr, msg);
-                        _tx.send(msg).expect("Failed to send message");
+                        _tx.send(packet).expect("failed to send msg");
                     }
 
                     Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
 
                     Err(_) => {
-                        println!("closing connection with: {}", addr);
+                        println!("Closing connection with: {}", addr);
                         break;
                     }
                 }
@@ -78,16 +72,28 @@ pub fn server() {
             });
         }
 
-        if let Ok(msg) = rx.try_recv() {
-            clients = clients
-                .into_iter()
-                .filter_map(|mut client| {
-                    let client_msg = msg.clone().into_bytes();
-                    let reply = AesPacket::encrypt_to_bytes(&mut client.1, client_msg.to_vec());
+        if let Ok(packet) = rx.try_recv() {
+            match packet {
+                Packet::ClientMessage(msg) => {
+                    clients = clients
+                        .into_iter()
+                        .filter_map(|mut client| {
+                            let buf = encode_packet(Packet::Message(
+                                msg.clone(),
+                                "someUnknownName".into(),
+                            ));
 
-                    client.0.write(&reply).map(|_| client).ok()
-                })
-                .collect::<Vec<_>>();
+                            let buf = AesPacket::encrypt_to_bytes(&mut client.1, buf);
+
+                            client.0.write_all(&buf).map(|_| client).ok()
+                        })
+                        .collect::<Vec<_>>();
+                }
+                Packet::ServerCommand(command) => {
+                    println!("Received {}", command);
+                }
+                _ => println!("client sent invalid packet"),
+            }
         }
 
         sleep();
