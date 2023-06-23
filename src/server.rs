@@ -32,7 +32,13 @@ pub fn do_server() {
         if let Ok((mut socket, addr)) = server.listener.accept() {
             println!("{} connected", addr);
 
-            let aes = server.kex_with_stream(&mut socket);
+            let aes = match server.kex_with_stream(&mut socket) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("error occured during kex with client, killing client (err: {e})");
+                    break;
+                }
+            };
             println!("KEX completed with {}", socket.peer_addr().unwrap());
 
             let _tx = tx.clone();

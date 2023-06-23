@@ -23,7 +23,13 @@ pub fn do_client() {
 
     let mut client = TcpStream::connect(ip).expect("Stream failed to connect");
 
-    let mut aes = client_kex(&mut client);
+    let mut aes = match client_kex(&mut client) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error occured during kex, dying (err: {e})");
+            std::process::exit(-1);
+        }
+    };
     let mut _aes = aes.clone();
 
     let (tx, rx) = mpsc::channel::<String>();
