@@ -15,5 +15,5 @@ pub fn ask(prompt: &str) -> String {
     io::stdin()
         .read_line(&mut answer)
         .expect("failed to readline");
-    answer.trim().to_lowercase()
+    answer.trim().into()
 }

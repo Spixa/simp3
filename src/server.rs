@@ -14,7 +14,7 @@ use std::{
 };
 use uuid::Uuid;
 
-pub fn server() {
+pub fn do_server() {
     println!("generating keypairs...");
     let server = StcpServer::bind("0.0.0.0:37549").unwrap();
     println!("server running on port 37549");
@@ -51,8 +51,11 @@ pub fn server() {
 
             broadcast(&mut clients, Packet::Join(uuid.to_string()), &uuid);
 
+
+            let mut clients = Arc::clone(&clients);
             thread::spawn(move || loop {
                 //let mut buff = vec![0; MSG_SIZE];
+                
                 let mut buff = [0_u8; MSG_SIZE];
 
                 match socket.read(&mut buff) {
@@ -74,7 +77,7 @@ pub fn server() {
                         };
 
                         if packet == Packet::Illegal {
-                            // broadcast(&mut clients ,Packet::Leave(uuid.to_string()), &uuid);
+                            broadcast(&mut clients ,Packet::Leave(uuid.to_string()), &uuid);
                             eprintln!("severing client {addr}");
                             break;
                         }
@@ -108,6 +111,7 @@ pub fn server() {
                 }
                 Packet::ServerCommand(command) => {
                     println!("Received {}", command);
+                    send(&mut clients, Packet::ClientRespone("I received your command - best regards, Server".to_string()), &packet.1)
                 }
                 Packet::_GracefulDisconnect => {}
                 _ => println!("client sent invalid packet"),
@@ -132,3 +136,15 @@ fn broadcast(clients: &mut ClientVec, packet: Packet, ignore: &Uuid) {
         client.0.write_all(&buf).map(|_| client).is_ok()
     });
 }
+
+fn send(clients: &mut ClientVec, packet: Packet, to: &Uuid) {
+    let mut clients = (*clients).lock().unwrap();
+    let packet = encode_packet(packet);
+
+    clients.iter_mut().filter(|x| x.2 == *to).for_each(|x| {
+
+        let buf = AesPacket::encrypt_to_bytes(&mut x.1, packet.clone());
+        let _ = x.0.write_all(&buf).map(|_| x).is_ok();
+    })
+}
+

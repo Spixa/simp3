@@ -3,9 +3,10 @@ use crate::{
     types::{Mode, Packet, LOCAL, MSG_SIZE},
     util::ask,
 };
+use colored::Colorize;
 use stcp::{bincode, client_kex, AesPacket};
 use std::{
-    io::{self, ErrorKind, Read, Write},
+    io::{ErrorKind, Read, Write},
     net::TcpStream,
     process::exit,
     sync::mpsc::{self, TryRecvError},
@@ -13,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-pub fn client() {
+pub fn do_client() {
     let mut ip = ask("enter server IP: ");
 
     if ip.as_str() == "" {
@@ -60,13 +61,13 @@ pub fn client() {
                 // }
 
                 match packet {
-                    Packet::Message(content, username) => println!("{}: {}", username, content),
-                    Packet::Join(username) => println!("{} joined", username),
-                    Packet::Leave(username) => println!("{} left", username),
+                    Packet::Message(content, username) => println!("{}{} {}", username.magenta(), ":".yellow(), content.green()),
+                    Packet::Join(username) => println!("{} {}", username.magenta(), "joined".yellow()),
+                    Packet::Leave(username) => println!("{} {}", username.magenta(), "left".yellow()),
                     Packet::ClientRespone(response) => {
-                        println!("Your previous command returned: {}", response)
+                        println!("{}{} {}", "Your previous command returned".green(), ":".yellow(), response.white())
                     }
-                    _ => panic!("Recv Illegal packet"),
+                    _ => panic!("{}", "Recv Illegal packet".red()),
                 }
             }
 
@@ -101,10 +102,11 @@ pub fn client() {
     println!("Write a Message");
 
     loop {
-        let mut sending = String::new();
-        io::stdin()
-            .read_line(&mut sending)
-            .expect("reading from stdin failed");
+        let sending = ask("");
+
+        // io::stdin()
+        //     .read_line(&mut sending)
+        //     .expect("reading from stdin failed");
         let msg = sending.trim().to_string();
         if msg == ":quit" || tx.send(msg).is_err() {
             break;
