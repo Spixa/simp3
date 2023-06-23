@@ -9,6 +9,7 @@ edition = "2021"
 stcp = { git = "https://github.com/vivyir/stcp", rev = "0107154" }
 aes-gcm = "0.10"
 bincode = "1.3"
+colored = "2.0.0"
 [dependencies.uuid]
 version = "1.3.4"
 features = [
