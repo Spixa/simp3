@@ -80,19 +80,16 @@ pub fn client() {
 
         match rx.try_recv() {
             Ok(msg) => {
-                let packet;
-                if msg.starts_with("/") {
-                    packet = Packet::ServerCommand(msg);
+                let packet = if msg.starts_with('/') {
+                    Packet::ServerCommand(msg)
                 } else {
-                    packet = Packet::ClientMessage(msg);
-                }
+                    Packet::ClientMessage(msg)
+                };
 
                 let buf = encode_packet(packet);
                 let enc = AesPacket::encrypt_to_bytes(&mut _aes, buf);
 
                 client.write_all(&enc).expect("writing to socket failed");
-
-                println!("message sent");
             }
             Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => break,

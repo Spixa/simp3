@@ -11,10 +11,10 @@ fn _split_bytes<'a>(bs: &'a [u8], pred: &'a [u8]) -> Vec<&'a [u8]> {
 
     indexes.reverse();
 
-    let mut cur = bs.clone();
+    let mut cur = <&[u8]>::clone(&bs);
     let mut res: Vec<&[u8]> = Vec::new();
 
-    for (start, end) in indexes.to_owned() {
+    for (start, end) in indexes.iter().copied() {
         let (first_left, first_right) = cur.split_at(end);
         res.push(first_right);
 
@@ -43,6 +43,7 @@ pub fn decode_packet(buf: &[u8], mode: Mode) -> Packet {
         "2" => Packet::Leave(strvec[1].clone()),
         "5" => Packet::ServerCommand(strvec[1].clone()),
         "6" => Packet::ClientRespone(strvec[1].clone()),
+        "7" => Packet::_GracefulDisconnect,
         _else => Packet::Illegal,
     };
 
@@ -59,7 +60,7 @@ pub fn decode_packet(buf: &[u8], mode: Mode) -> Packet {
 */
 
 pub fn encode_packet(packet: Packet) -> Vec<u8> {
-    let result = match packet {
+    match packet {
         Packet::Message(content, username) => {
             format!("0\x01{}\x01{}", content, username).into_bytes()
         }
@@ -68,8 +69,7 @@ pub fn encode_packet(packet: Packet) -> Vec<u8> {
         Packet::Leave(username) => format!("2\x01{}", username).into_bytes(),
         Packet::ServerCommand(command) => format!("5\x01{}", command).into_bytes(),
         Packet::ClientRespone(response) => format!("6\x01{}", response).into_bytes(),
+        Packet::_GracefulDisconnect => "7".to_string().into_bytes(),
         Packet::Illegal => panic!("You cannot send an illegal packet!"),
-    };
-
-    result
+    }
 }
