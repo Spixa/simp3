@@ -67,11 +67,22 @@ pub fn do_client() {
                 // }
 
                 match packet {
-                    Packet::Message(content, username) => println!("{}{} {}", username.magenta(), ":".yellow(), content.green()),
-                    Packet::Join(username) => println!("{} {}", username.magenta(), "joined".yellow()),
-                    Packet::Leave(username) => println!("{} {}", username.magenta(), "left".yellow()),
+                    Packet::Message(content, username) => {
+                        println!("{}{} {}", username.magenta(), ":".yellow(), content.green())
+                    }
+                    Packet::Join(username) => {
+                        println!("{} {}", username.magenta(), "joined".yellow())
+                    }
+                    Packet::Leave(username) => {
+                        println!("{} {}", username.magenta(), "left".yellow())
+                    }
                     Packet::ClientRespone(response) => {
-                        println!("{}{} {}", "Your previous command returned".green(), ":".yellow(), response.white())
+                        println!(
+                            "{}{} {}",
+                            "Your previous command returned".green(),
+                            ":".yellow(),
+                            response.white()
+                        )
                     }
                     _ => panic!("{}", "Recv Illegal packet".red()),
                 }

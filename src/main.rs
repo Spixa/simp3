@@ -6,7 +6,7 @@ mod util;
 
 use colored::Colorize;
 
-use crate::{util::ask};
+use crate::util::ask;
 
 fn main() {
     let answer = ask("server or client: ");

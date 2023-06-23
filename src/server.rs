@@ -57,52 +57,53 @@ pub fn do_server() {
 
             broadcast(&mut clients, Packet::Join(uuid.to_string()), &uuid);
 
+            thread::spawn({
+                let mut clients = Arc::clone(&clients);
+                move || loop {
+                    //let mut buff = vec![0; MSG_SIZE];
 
-            let mut clients = Arc::clone(&clients);
-            thread::spawn(move || loop {
-                //let mut buff = vec![0; MSG_SIZE];
-                
-                let mut buff = [0_u8; MSG_SIZE];
+                    let mut buff = [0_u8; MSG_SIZE];
 
-                match socket.read(&mut buff) {
-                    Ok(size) => {
-                        let packet = match bincode::deserialize::<AesPacket>(&buff[..size]) {
-                            Ok(enc) => {
-                                let dec = enc.decrypt(&mut _aes);
-                                decode_packet(&dec, Mode::Server)
-                            }
-                            Err(err) => {
-                                if err.to_string() != "io error: unexpected end of file" {
-                                    eprintln!(
+                    match socket.read(&mut buff) {
+                        Ok(size) => {
+                            let packet = match bincode::deserialize::<AesPacket>(&buff[..size]) {
+                                Ok(enc) => {
+                                    let dec = enc.decrypt(&mut _aes);
+                                    decode_packet(&dec, Mode::Server)
+                                }
+                                Err(err) => {
+                                    if err.to_string() != "io error: unexpected end of file" {
+                                        eprintln!(
                                         "Error trying to deserialize packet from {addr}, err: {err}"
                                     );
+                                    }
+
+                                    Packet::Illegal
                                 }
+                            };
 
-                                Packet::Illegal
+                            if packet == Packet::Illegal {
+                                broadcast(&mut clients, Packet::Leave(uuid.to_string()), &uuid);
+                                eprintln!("severing client {addr}");
+                                break;
                             }
-                        };
 
-                        if packet == Packet::Illegal {
-                            broadcast(&mut clients ,Packet::Leave(uuid.to_string()), &uuid);
-                            eprintln!("severing client {addr}");
-                            break;
+                            println!("{:?}", packet);
+
+                            _tx.send(OwnedPacket(packet, uuid))
+                                .expect("failed to send msg");
                         }
 
-                        println!("{:?}", packet);
+                        Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
 
-                        _tx.send(OwnedPacket(packet, uuid))
-                            .expect("failed to send msg");
+                        Err(_) => {
+                            println!("closing connection with: {}", addr);
+                            break;
+                        }
                     }
 
-                    Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
-
-                    Err(_) => {
-                        println!("closing connection with: {}", addr);
-                        break;
-                    }
+                    sleep();
                 }
-
-                sleep();
             });
         }
 
@@ -117,7 +118,13 @@ pub fn do_server() {
                 }
                 Packet::ServerCommand(command) => {
                     println!("Received {}", command);
-                    send(&mut clients, Packet::ClientRespone("I received your command - best regards, Server".to_string()), &packet.1)
+                    send(
+                        &mut clients,
+                        Packet::ClientRespone(
+                            "I received your command - best regards, Server".to_string(),
+                        ),
+                        &packet.1,
+                    )
                 }
                 Packet::_GracefulDisconnect => {}
                 _ => println!("client sent invalid packet"),
@@ -148,9 +155,7 @@ fn send(clients: &mut ClientVec, packet: Packet, to: &Uuid) {
     let packet = encode_packet(packet);
 
     clients.iter_mut().filter(|x| x.2 == *to).for_each(|x| {
-
         let buf = AesPacket::encrypt_to_bytes(&mut x.1, packet.clone());
         let _ = x.0.write_all(&buf).map(|_| x).is_ok();
     })
 }
-
