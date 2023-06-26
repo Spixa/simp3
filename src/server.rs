@@ -67,8 +67,6 @@ pub fn do_server() {
             thread::spawn({
                 let mut clients = Arc::clone(&clients);
                 move || loop {
-                    //let mut buff = vec![0; MSG_SIZE];
-
                     let mut buff = [0_u8; MSG_SIZE];
 
                     match socket.read(&mut buff) {

@@ -60,12 +60,6 @@ pub fn do_client() {
 
                 let packet = decode_packet(&decrypted_data, Mode::Client);
 
-                // println!("message recv: {:?}", decrypted_data);
-                // match String::from_utf8(decrypted_data) {
-                //     Ok(str_msg) => println!("UTF-8: {}", str_msg),
-                //     Err(_) => println!("message is not UTF-8"),
-                // }
-
                 match packet {
                     Packet::Message(content, username) => {
                         println!("{}{} {}", username.magenta(), ":".yellow(), content.green())
@@ -123,10 +117,6 @@ pub fn do_client() {
 
     loop {
         let sending = ask("");
-
-        // io::stdin()
-        //     .read_line(&mut sending)
-        //     .expect("reading from stdin failed");
         let msg = sending.trim().to_string();
         if msg == ":quit" || tx.send(msg).is_err() {
             break;
