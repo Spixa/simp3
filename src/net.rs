@@ -43,6 +43,7 @@ pub fn decode_packet(buf: &[u8], mode: Mode) -> Packet {
         "2" => Packet::Leave(strvec[1].clone()),
         "5" => Packet::ServerCommand(strvec[1].clone()),
         "6" => Packet::ClientRespone(strvec[1].clone()),
+        "8" => Packet::ServerDM(strvec[1].clone()),
         "7" => Packet::_GracefulDisconnect,
         _else => Packet::Illegal,
     };
@@ -69,6 +70,7 @@ pub fn encode_packet(packet: Packet) -> Vec<u8> {
         Packet::Leave(username) => format!("2\x01{}", username).into_bytes(),
         Packet::ServerCommand(command) => format!("5\x01{}", command).into_bytes(),
         Packet::ClientRespone(response) => format!("6\x01{}", response).into_bytes(),
+        Packet::ServerDM(msg) => format!("8\x01{}", msg).into_bytes(),
         Packet::_GracefulDisconnect => "7".to_string().into_bytes(),
         Packet::Illegal => panic!("You cannot send an illegal packet!"),
     }

@@ -21,6 +21,7 @@ pub enum Packet {
     Leave(String),
     ServerCommand(String),
     ClientRespone(String),
+    ServerDM(String),
     _GracefulDisconnect,
     Illegal,
 }

@@ -56,6 +56,13 @@ pub fn do_server() {
             }
 
             broadcast(&mut clients, Packet::Join(uuid.to_string()), &uuid);
+            send(
+                &mut clients,
+                Packet::ServerDM(
+                    String::from_utf8(include_bytes!("welcome.txt").to_vec()).unwrap(),
+                ),
+                &uuid,
+            );
 
             thread::spawn({
                 let mut clients = Arc::clone(&clients);
@@ -88,7 +95,7 @@ pub fn do_server() {
                                 break;
                             }
 
-                            println!("{:?}", packet);
+                            println!("{:?} from {}", packet, uuid);
 
                             _tx.send(OwnedPacket(packet, uuid))
                                 .expect("failed to send msg");

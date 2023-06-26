@@ -84,6 +84,9 @@ pub fn do_client() {
                             response.white()
                         )
                     }
+                    Packet::ServerDM(msg) => {
+                        println!("{}", msg.bright_cyan());
+                    }
                     _ => panic!("{}", "Recv Illegal packet".red()),
                 }
             }

@@ -1,0 +1,3 @@
+Welcome to this server!
+We hope you enjoy your stay
+Edit this default welcome message at `src/welcome.txt` (it is embedded into the executable, so needs to be recompiled)
