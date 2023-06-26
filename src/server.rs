@@ -102,6 +102,7 @@ pub fn do_server() {
                         Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
 
                         Err(_) => {
+                            broadcast(&mut clients, Packet::Leave(uuid.to_string()), &uuid);
                             println!("closing connection with: {}", addr);
                             break;
                         }
