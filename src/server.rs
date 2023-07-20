@@ -89,7 +89,7 @@ pub fn do_server() {
 
                             if packet == Packet::Illegal {
                                 broadcast(&mut clients, Packet::Leave(uuid.to_string()), &uuid);
-                                eprintln!("severing client {addr}");
+                                eprintln!("closing connection with: {addr}");
                                 break;
                             }
 
@@ -124,13 +124,28 @@ pub fn do_server() {
                 }
                 Packet::ServerCommand(command) => {
                     println!("Received {}", command);
-                    send(
-                        &mut clients,
-                        Packet::ClientRespone(
-                            "I received your command - best regards, Server".to_string(),
-                        ),
-                        &packet.1,
-                    )
+                    let (cmd, content) = command.split_once(' ').unwrap_or(("L", "boz"));
+
+                    match cmd {
+                        "/ssc" => {
+                            // super secret command
+                            println!("Triggered super secret command!");
+                            broadcast(
+                                &mut clients,
+                                Packet::Broadcast(content.to_string()),
+                                &Uuid::nil(),
+                            )
+                        }
+                        &_ => {
+                            send(
+                                &mut clients,
+                                Packet::ClientRespone(
+                                    "I received your command - best regards, Server".to_string(),
+                                ),
+                                &packet.1,
+                            );
+                        }
+                    }
                 }
                 Packet::_GracefulDisconnect => {}
                 _ => println!("client sent invalid packet"),

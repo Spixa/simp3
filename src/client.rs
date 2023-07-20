@@ -21,6 +21,7 @@ pub fn do_client() {
         ip.push_str(LOCAL);
     }
 
+
     let mut client = TcpStream::connect(ip).expect("Stream failed to connect");
 
     let mut aes = match client_kex(&mut client) {
@@ -37,6 +38,12 @@ pub fn do_client() {
     client
         .set_nonblocking(true)
         .expect("failed to initiate non-blocking");
+
+    // {
+    //     let buf = encode_packet(Packet::Authenticate(uname, passwd));
+    //     let enc = AesPacket::encrypt_to_bytes(&mut _aes, buf);
+    //     client.write_all(&enc).expect("writing to socket failed");
+    // }
 
     thread::spawn(move || loop {
         let mut buff = [0_u8; MSG_SIZE];
@@ -80,6 +87,51 @@ pub fn do_client() {
                     }
                     Packet::ServerDM(msg) => {
                         println!("{}", msg.bright_cyan());
+                    }
+                    Packet::Broadcast(msg) => {
+                        print!(
+                            "{}{}{} ",
+                            "[".bright_black(),
+                            "simp3".green(),
+                            "]".bright_black()
+                        );
+
+                        let words = msg.split_whitespace();
+
+                        #[derive(PartialEq)]
+                        enum Color {
+                            Red,
+                            Default,
+                        }
+                        let mut red = Color::Default;
+
+                        for x in words {
+                            if x.starts_with('"') {
+                                red = Color::Red;
+                            }
+
+                            if red == Color::Red {
+                                print!("{} ", x.red());
+                            } else if x.parse::<i64>().is_ok() {
+                                print!("{} ", x.bright_magenta());
+                            } else if x.starts_with('#') {
+                                print!("{} ", x.bright_blue());
+                            } else if !x.split_once('.').unwrap_or((x, "")).1.is_empty() {
+                                print!("{} ", x.bright_green());
+                            } else if x.to_lowercase() == "spixa" {
+                                print!("{} ", "Spixa".bright_cyan());
+                            } else if x.starts_with('/') {
+                                print!("{} ", x.bold().blue())
+                            } else {
+                                print!("{} ", x.yellow());
+                            }
+
+                            if x.ends_with('"') {
+                                red = Color::Default;
+                            }
+                        }
+
+                        println!();
                     }
                     _ => panic!("{}", "Recv Illegal packet".red()),
                 }
