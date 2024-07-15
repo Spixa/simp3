@@ -124,12 +124,10 @@ pub fn do_server() {
                                     .filter(|x| x.2 .0 == uuid)
                                     .collect::<Vec<&mut Client>>();
 
-                                match &auth_status.first() {
-                                    Some(_) => {}
-                                    None => {
-                                        break;
-                                    }
+                                if &auth_status.first().is_none() {
+                                    break;
                                 }
+
                                 let auth_status = &auth_status.first().unwrap().2 .1;
 
                                 if auth_status.clone() == AuthStatus::Unauth {
