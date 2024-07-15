@@ -124,7 +124,7 @@ pub fn do_server() {
                                     .filter(|x| x.2 .0 == uuid)
                                     .collect::<Vec<&mut Client>>();
 
-                                if &auth_status.first().is_none() {
+                                if auth_status.first().is_none() {
                                     break;
                                 }
 
