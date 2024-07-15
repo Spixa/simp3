@@ -21,7 +21,6 @@ pub fn do_client() {
         ip.push_str(LOCAL);
     }
 
-
     let mut client = TcpStream::connect(ip).expect("Stream failed to connect");
 
     let mut aes = match client_kex(&mut client) {
@@ -39,11 +38,12 @@ pub fn do_client() {
         .set_nonblocking(true)
         .expect("failed to initiate non-blocking");
 
-    // {
-    //     let buf = encode_packet(Packet::Authenticate(uname, passwd));
-    //     let enc = AesPacket::encrypt_to_bytes(&mut _aes, buf);
-    //     client.write_all(&enc).expect("writing to socket failed");
-    // }
+    {
+        let uname = ask("Enter username: ");
+        let buf = encode_packet(Packet::Auth(uname));
+        let enc = AesPacket::encrypt_to_bytes(&mut _aes, buf);
+        client.write_all(&enc).expect("writing to socket failed");
+    }
 
     thread::spawn(move || loop {
         let mut buff = [0_u8; MSG_SIZE];

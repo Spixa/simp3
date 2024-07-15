@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 stcp = { git = "https://github.com/vivyir/stcp", rev = "8a4b951" }
 aes-gcm = "0.10"
+clap = { version = "4.5.4", features = ["derive", "cargo", "deprecated"] }
 bincode = "1.3"
 colored = "2.0.0"
 [dependencies.uuid]

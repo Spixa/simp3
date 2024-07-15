@@ -5,9 +5,8 @@ mod server;
 mod types;
 mod util;
 
-use colored::Colorize;
-
 use crate::util::ask;
+use colored::Colorize;
 
 fn main() {
     let answer = ask("server or client: ");

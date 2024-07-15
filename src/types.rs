@@ -9,8 +9,16 @@ use uuid::Uuid;
 pub const LOCAL: &str = "127.0.0.1:37549";
 pub const MSG_SIZE: usize = 16384;
 
-pub struct Client(pub TcpStream, pub Aes256Gcm, pub Uuid);
-pub struct OwnedPacket(pub Packet, pub Uuid);
+#[derive(Clone, PartialEq)]
+pub enum AuthStatus {
+    Unauth,
+    Authed(String),
+}
+
+pub struct Auth(pub Uuid, pub AuthStatus);
+
+pub struct Client(pub TcpStream, pub Aes256Gcm, pub Auth);
+pub struct OwnedPacket(pub Packet, pub Auth);
 pub type ClientVec = Arc<Mutex<Vec<Client>>>;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,6 +31,7 @@ pub enum Packet {
     ClientRespone(String),
     ServerDM(String),
     Broadcast(String),
+    Auth(String),
     _GracefulDisconnect,
     Illegal,
 }
