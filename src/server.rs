@@ -3,6 +3,7 @@ use crate::{
     types::{Auth, AuthStatus, Client, ClientVec, Mode, OwnedPacket, Packet, MSG_SIZE},
     util::sleep,
 };
+use colored::Colorize;
 use stcp::{bincode, AesPacket, StcpServer};
 use std::{
     io::{ErrorKind, Read, Write},
@@ -13,7 +14,6 @@ use std::{
     thread,
 };
 use uuid::Uuid;
-use colored::Colorize;
 
 pub fn do_server() {
     println!("generating keypairs...");
@@ -101,8 +101,7 @@ pub fn do_server() {
                                     break;
                                 }
 
-                                let auth_status =
-                                    &auth_status.first().unwrap().auth.auth_status;
+                                let auth_status = &auth_status.first().unwrap().auth.auth_status;
 
                                 if let AuthStatus::Authed(uname_) = auth_status.clone() {
                                     uname = uname_
@@ -110,7 +109,6 @@ pub fn do_server() {
                             }
 
                             if packet == Packet::Illegal {
-
                                 if !uname.is_empty() {
                                     broadcast(&mut clients, Packet::Leave(uname), &uuid);
                                 }
