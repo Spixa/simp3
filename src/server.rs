@@ -48,11 +48,14 @@ pub fn do_server() {
 
             {
                 let mut clients = (*clients).lock().unwrap();
-                clients.push(Client(
-                    socket.try_clone().expect("failed to clone client"),
+                clients.push(Client {
+                    stream: socket.try_clone().expect("failed to clone client"),
                     aes,
-                    Auth(uuid, AuthStatus::Unauth),
-                ));
+                    auth: Auth {
+                        uuid,
+                        auth_status: AuthStatus::Unauth,
+                    },
+                });
             }
 
             send(
@@ -92,10 +95,11 @@ pub fn do_server() {
                                     let mut clients = (*clients).lock().unwrap();
                                     let auth_status = &clients
                                         .iter_mut()
-                                        .filter(|x| x.2 .0 == uuid)
+                                        .filter(|x| x.auth.uuid == uuid)
                                         .collect::<Vec<&mut Client>>();
 
-                                    let auth_status = &auth_status.first().unwrap().2 .1;
+                                    let auth_status =
+                                        &auth_status.first().unwrap().auth.auth_status;
 
                                     if let AuthStatus::Authed(uname_) = auth_status.clone() {
                                         uname = uname_
@@ -121,14 +125,14 @@ pub fn do_server() {
 
                                 let auth_status = &clients
                                     .iter_mut()
-                                    .filter(|x| x.2 .0 == uuid)
+                                    .filter(|x| x.auth.uuid == uuid)
                                     .collect::<Vec<&mut Client>>();
 
                                 if auth_status.first().is_none() {
                                     break;
                                 }
 
-                                let auth_status = &auth_status.first().unwrap().2 .1;
+                                let auth_status = &auth_status.first().unwrap().auth.auth_status;
 
                                 if auth_status.clone() == AuthStatus::Unauth {
                                     if let Packet::Auth(ref _uname) = packet {
@@ -138,8 +142,14 @@ pub fn do_server() {
                                     }
                                 }
 
-                                _tx.send(OwnedPacket(packet, Auth(uuid, auth_status.clone())))
-                                    .expect("failed to send msg");
+                                _tx.send(OwnedPacket(
+                                    packet,
+                                    Auth {
+                                        uuid,
+                                        auth_status: auth_status.clone(),
+                                    },
+                                ))
+                                .expect("failed to send msg");
                             }
                         }
 
@@ -151,10 +161,10 @@ pub fn do_server() {
                                 let mut clients = (*clients).lock().unwrap();
                                 let auth_status = &clients
                                     .iter_mut()
-                                    .filter(|x| x.2 .0 == uuid)
+                                    .filter(|x| x.auth.uuid == uuid)
                                     .collect::<Vec<&mut Client>>();
 
-                                let auth_status = &auth_status.first().unwrap().2 .1;
+                                let auth_status = &auth_status.first().unwrap().auth.auth_status;
 
                                 if let AuthStatus::Authed(uname_) = auth_status.clone() {
                                     uname = uname_
@@ -184,18 +194,18 @@ pub fn do_server() {
                             Packet::ServerDM(
                                 "Your username is NOT alphanumeric. You shall be wiped from this earth".to_string(),
                             ),
-                            &packet.1 .0,
+                            &packet.1 .uuid,
                         );
-                        kick(&mut clients, &packet.1 .0)
+                        kick(&mut clients, &packet.1.uuid)
                     } else {
-                        authenticate(&mut clients, &packet.1 .0, &username);
-                        println!("Authenticated {} to {}", packet.1 .0, username);
+                        authenticate(&mut clients, &packet.1.uuid, &username);
+                        println!("Authenticated {} to {}", packet.1.uuid, username);
                         broadcast(&mut clients, Packet::Join(username), &Uuid::nil());
                     }
                 }
                 Packet::ClientMessage(msg) => {
-                    if let AuthStatus::Authed(uname) = packet.1 .1 {
-                        broadcast(&mut clients, Packet::Message(msg, uname), &packet.1 .0);
+                    if let AuthStatus::Authed(uname) = packet.1.auth_status {
+                        broadcast(&mut clients, Packet::Message(msg, uname), &packet.1.uuid);
                     }
                 }
                 Packet::ServerCommand(command) => {
@@ -218,7 +228,7 @@ pub fn do_server() {
                                 Packet::ClientRespone(
                                     "I received your command - best regards, Server".to_string(),
                                 ),
-                                &packet.1 .0,
+                                &packet.1.uuid,
                             );
                         }
                     }
@@ -236,34 +246,43 @@ fn broadcast(clients: &mut ClientVec, packet: Packet, ignore: &Uuid) {
     let mut clients = (*clients).lock().unwrap();
     let packet = encode_packet(packet);
     clients.retain_mut(|client| {
-        if client.2 .0 == *ignore {
+        if client.auth.uuid == *ignore {
             return true;
         }
 
-        let buf = AesPacket::encrypt_to_bytes(&mut client.1, packet.clone());
-        client.0.write_all(&buf).map(|_| client).is_ok()
+        let buf = AesPacket::encrypt_to_bytes(&mut client.aes, packet.clone());
+        client.stream.write_all(&buf).map(|_| client).is_ok()
     });
 }
 
 fn authenticate(clients: &mut ClientVec, who: &Uuid, to: &String) {
     let mut clients = (*clients).lock().unwrap();
-    clients.iter_mut().filter(|x| x.2 .0 == *who).for_each(|x| {
-        x.2 = Auth(x.2 .0, AuthStatus::Authed(to.to_string()));
-    });
+    clients
+        .iter_mut()
+        .filter(|x| x.auth.uuid == *who)
+        .for_each(|x| {
+            x.auth = Auth {
+                uuid: x.auth.uuid,
+                auth_status: AuthStatus::Authed(to.to_string()),
+            };
+        });
 }
 
 fn kick(clients: &mut ClientVec, who: &Uuid) {
     dbg!("KICK EXECUTED");
     let mut clients = (*clients).lock().unwrap();
-    clients.retain(|x| x.2 .0 != *who);
+    clients.retain(|x| x.auth.uuid != *who);
 }
 
 fn send(clients: &mut ClientVec, packet: Packet, to: &Uuid) {
     let mut clients = (*clients).lock().unwrap();
     let packet = encode_packet(packet);
 
-    clients.iter_mut().filter(|x| x.2 .0 == *to).for_each(|x| {
-        let buf = AesPacket::encrypt_to_bytes(&mut x.1, packet.clone());
-        let _ = x.0.write_all(&buf).map(|_| x).is_ok();
-    })
+    clients
+        .iter_mut()
+        .filter(|x| x.auth.uuid == *to)
+        .for_each(|x| {
+            let buf = AesPacket::encrypt_to_bytes(&mut x.aes, packet.clone());
+            let _ = x.stream.write_all(&buf).map(|_| x).is_ok();
+        })
 }

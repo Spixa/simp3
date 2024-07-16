@@ -14,8 +14,15 @@ pub enum AuthStatus {
     Unauth,
     Authed(String),
 }
-pub struct Auth(pub Uuid, pub AuthStatus);
-pub struct Client(pub TcpStream, pub Aes256Gcm, pub Auth);
+pub struct Auth {
+    pub uuid: Uuid,
+    pub auth_status: AuthStatus,
+}
+pub struct Client {
+    pub stream: TcpStream,
+    pub aes: Aes256Gcm,
+    pub auth: Auth,
+}
 pub struct OwnedPacket(pub Packet, pub Auth);
 pub type ClientVec = Arc<Mutex<Vec<Client>>>;
 
