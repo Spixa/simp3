@@ -13,6 +13,7 @@ use std::{
     thread,
 };
 use uuid::Uuid;
+use colored::Colorize;
 
 pub fn do_server() {
     println!("generating keypairs...");
@@ -89,22 +90,26 @@ pub fn do_server() {
                                 }
                             };
 
-                            if packet == Packet::Illegal {
-                                let mut uname = String::new();
-                                {
-                                    let mut clients = (*clients).lock().unwrap();
-                                    let auth_status = &clients
-                                        .iter_mut()
-                                        .filter(|x| x.auth.uuid == uuid)
-                                        .collect::<Vec<&mut Client>>();
-
-                                    let auth_status =
-                                        &auth_status.first().unwrap().auth.auth_status;
-
-                                    if let AuthStatus::Authed(uname_) = auth_status.clone() {
-                                        uname = uname_
-                                    }
+                            let mut uname = String::new();
+                            {
+                                let mut clients = (*clients).lock().unwrap();
+                                let auth_status = &clients
+                                    .iter_mut()
+                                    .filter(|x| x.auth.uuid == uuid)
+                                    .collect::<Vec<&mut Client>>();
+                                if auth_status.first().is_none() {
+                                    break;
                                 }
+
+                                let auth_status =
+                                    &auth_status.first().unwrap().auth.auth_status;
+
+                                if let AuthStatus::Authed(uname_) = auth_status.clone() {
+                                    uname = uname_
+                                }
+                            }
+
+                            if packet == Packet::Illegal {
 
                                 if !uname.is_empty() {
                                     broadcast(&mut clients, Packet::Leave(uname), &uuid);
@@ -118,7 +123,13 @@ pub fn do_server() {
                                 break;
                             }
 
-                            println!("{:?} from {}", packet, uuid);
+                            print!("{}", format!("{:?}", packet).cyan());
+                            print!(" from {}", format!("{}", uuid).magenta());
+                            if uname.is_empty() {
+                                println!();
+                            } else {
+                                println!(" (AKA: {})", uname.green());
+                            }
 
                             {
                                 let mut clients = (*clients).lock().unwrap();
