@@ -85,54 +85,8 @@ pub fn do_client() {
                             response.white()
                         )
                     }
-                    Packet::ServerDM(msg) => {
-                        println!("{}", msg.bright_cyan());
-                    }
-                    Packet::Broadcast(msg) => {
-                        print!(
-                            "{}{}{} ",
-                            "[".bright_black(),
-                            "simp3".green(),
-                            "]".bright_black()
-                        );
-
-                        let words = msg.split_whitespace();
-
-                        #[derive(PartialEq)]
-                        enum Color {
-                            Red,
-                            Default,
-                        }
-                        let mut red = Color::Default;
-
-                        for x in words {
-                            if x.starts_with('"') {
-                                red = Color::Red;
-                            }
-
-                            if red == Color::Red {
-                                print!("{} ", x.red());
-                            } else if x.parse::<i64>().is_ok() {
-                                print!("{} ", x.bright_magenta());
-                            } else if x.starts_with('#') {
-                                print!("{} ", x.bright_blue());
-                            } else if !x.split_once('.').unwrap_or((x, "")).1.is_empty() {
-                                print!("{} ", x.bright_green());
-                            } else if x.to_lowercase() == "spixa" {
-                                print!("{} ", "Spixa".bright_cyan());
-                            } else if x.starts_with('/') {
-                                print!("{} ", x.bold().blue())
-                            } else {
-                                print!("{} ", x.yellow());
-                            }
-
-                            if x.ends_with('"') {
-                                red = Color::Default;
-                            }
-                        }
-
-                        println!();
-                    }
+                    Packet::ServerDM(msg) => format_broadcast(String::from("server"), msg),
+                    Packet::Broadcast(msg) => format_broadcast(String::from("simp3"), msg),
                     _ => panic!("{}", "Recv Illegal packet".red()),
                 }
             }
@@ -175,4 +129,48 @@ pub fn do_client() {
         }
     }
     println!("bye bye");
+}
+
+fn format_broadcast(by: String, msg: String) {
+    print!(
+        "{}{}{} ",
+        "[".bright_black(),
+        by.green(),
+        "]".bright_black()
+    );
+
+    let words = msg.split_whitespace();
+    #[derive(PartialEq)]
+    enum Color {
+        Red,
+        Default,
+    }
+    let mut red = Color::Default;
+
+    for x in words {
+        if x.starts_with('"') {
+            red = Color::Red;
+        }
+
+        if red == Color::Red {
+            print!("{} ", x.red());
+        } else if x.parse::<i64>().is_ok() {
+            print!("{} ", x.bright_magenta());
+        } else if x.starts_with('#') {
+            print!("{} ", x.bright_blue());
+        } else if !x.split_once('.').unwrap_or((x, "")).1.is_empty() {
+            print!("{} ", x.bright_green());
+        } else if x.to_lowercase() == "spixa" {
+            print!("{} ", "Spixa".bright_cyan());
+        } else if x.starts_with('/') {
+            print!("{} ", x.bold().blue())
+        } else {
+            print!("{} ", x.yellow());
+        }
+
+        if x.ends_with('"') {
+            red = Color::Default;
+        }
+    }
+    println!();
 }
