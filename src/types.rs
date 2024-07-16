@@ -36,7 +36,7 @@ pub enum Packet {
     ClientRespone(String),
     ServerDM(String),
     Broadcast(String),
-    Auth(String),
+    Auth(String, String),
     _GracefulDisconnect,
     Illegal,
 }

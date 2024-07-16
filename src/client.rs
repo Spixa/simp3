@@ -40,7 +40,8 @@ pub fn do_client() {
 
     {
         let uname = ask("Enter username: ");
-        let buf = encode_packet(Packet::Auth(uname));
+        let passwd = ask("Enter password: ");
+        let buf = encode_packet(Packet::Auth(uname, passwd));
         let enc = AesPacket::encrypt_to_bytes(&mut _aes, buf);
         client.write_all(&enc).expect("writing to socket failed");
     }

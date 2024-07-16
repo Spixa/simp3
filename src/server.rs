@@ -135,7 +135,7 @@ pub fn do_server() {
                                 let auth_status = &auth_status.first().unwrap().auth.auth_status;
 
                                 if auth_status.clone() == AuthStatus::Unauth {
-                                    if let Packet::Auth(ref _uname) = packet {
+                                    if let Packet::Auth(_, _) = packet {
                                     } else {
                                         eprintln!("Previous client did NOT authenticate thereby being kicked from the server");
                                         break;
@@ -187,7 +187,7 @@ pub fn do_server() {
 
         if let Ok(packet) = rx.try_recv() {
             match packet.0 {
-                Packet::Auth(username) => {
+                Packet::Auth(username, passwd) => {
                     if !username.chars().all(char::is_alphanumeric) || username.len() > 16 {
                         send(
                             &mut clients,
@@ -199,7 +199,10 @@ pub fn do_server() {
                         kick(&mut clients, &packet.1.uuid)
                     } else {
                         authenticate(&mut clients, &packet.1.uuid, &username);
-                        println!("Authenticated {} to {}", packet.1.uuid, username);
+                        println!(
+                            "Authenticated {} to {} with password {}",
+                            packet.1.uuid, username, passwd
+                        );
                         broadcast(&mut clients, Packet::Join(username), &Uuid::nil());
                     }
                 }
@@ -269,7 +272,6 @@ fn authenticate(clients: &mut ClientVec, who: &Uuid, to: &String) {
 }
 
 fn kick(clients: &mut ClientVec, who: &Uuid) {
-    dbg!("KICK EXECUTED");
     let mut clients = (*clients).lock().unwrap();
     clients.retain(|x| x.auth.uuid != *who);
 }
