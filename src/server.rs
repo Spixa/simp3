@@ -210,7 +210,9 @@ pub fn do_server() {
                         authenticate(&mut clients, &packet.1.uuid, &username);
                         println!(
                             "Authenticated {} to {} with password {}",
-                            packet.1.uuid, username, passwd
+                            packet.1.uuid.to_string().magenta(),
+                            username.green(),
+                            passwd.red()
                         );
                         broadcast(&mut clients, Packet::Join(username), &Uuid::nil());
                     }

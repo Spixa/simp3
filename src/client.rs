@@ -1,3 +1,4 @@
+use crate::util::derive_from_phrase;
 use crate::{
     net::{decode_packet, encode_packet},
     types::{Mode, Packet, LOCAL, MSG_SIZE},
@@ -17,6 +18,7 @@ use std::{
 pub fn do_client() {
     let mut ip = ask("enter server IP: ");
 
+    let _ = derive_from_phrase(None);
     if ip.as_str() == "" {
         ip.push_str(LOCAL);
     }
