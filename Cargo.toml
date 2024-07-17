@@ -13,6 +13,8 @@ bincode = "1.3"
 colored = "2.0.0"
 randomizer = "0.1.2"
 rs_sha512 = "0.1.3"
+diesel = { version = "2.2.1", features = ["sqlite"] }
+dotenv = "0.15.0"
 [dependencies.uuid]
 version = "1.3.4"
 features = [
