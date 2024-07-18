@@ -21,7 +21,8 @@ pub fn ask(prompt: &str) -> String {
     answer.trim().into()
 }
 
-pub fn derive_from_phrase(phrase: Option<String>) -> Result<String, &'static str> {
+// Useless for now lol
+pub fn _derive_from_phrase(phrase: Option<String>) -> Result<String, &'static str> {
     let wordlist = include_str!("dict.txt")
         .lines()
         .collect::<Vec<&'static str>>();

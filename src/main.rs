@@ -1,6 +1,11 @@
+// #![feature(proc_macro_hygiene, decl_macro)]
+extern crate diesel;
+
 mod client;
 mod command;
+mod db_model;
 mod net;
+mod schema;
 mod server;
 mod types;
 mod util;

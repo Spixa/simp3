@@ -1,4 +1,3 @@
-use crate::util::derive_from_phrase;
 use crate::{
     net::{decode_packet, encode_packet},
     types::{Mode, Packet, LOCAL, MSG_SIZE},
@@ -15,10 +14,14 @@ use std::{
     time::Duration,
 };
 
+use rs_sha512::HasherContext;
+use rs_sha512::Sha512State;
+use std::hash::BuildHasher;
+use std::hash::Hasher;
+
 pub fn do_client() {
     let mut ip = ask("enter server IP: ");
 
-    let _ = derive_from_phrase(None);
     if ip.as_str() == "" {
         ip.push_str(LOCAL);
     }
@@ -42,8 +45,13 @@ pub fn do_client() {
 
     {
         let uname = ask("Enter username: ");
+
         let passwd = ask("Enter password: ");
-        let buf = encode_packet(Packet::Auth(uname, passwd));
+        let mut phrase_hash = Sha512State::default().build_hasher();
+        phrase_hash.write(&passwd.bytes().collect::<Vec<u8>>()[..]);
+        let phrase_hash = HasherContext::finish(&mut phrase_hash);
+
+        let buf = encode_packet(Packet::Auth(uname, format!("{phrase_hash:02x}")));
         let enc = AesPacket::encrypt_to_bytes(&mut _aes, buf);
         client.write_all(&enc).expect("writing to socket failed");
     }

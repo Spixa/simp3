@@ -1,9 +1,12 @@
 use crate::{
+    db_model::{establish_connection, NewUser, User},
     net::{decode_packet, encode_packet},
     types::{Auth, AuthStatus, Client, ClientVec, Mode, OwnedPacket, Packet, MSG_SIZE},
     util::sleep,
 };
 use colored::Colorize;
+use diesel::prelude::*;
+use diesel::sql_query;
 use stcp::{bincode, AesPacket, StcpServer};
 use std::{
     io::{ErrorKind, Read, Write},
@@ -14,6 +17,45 @@ use std::{
     thread,
 };
 use uuid::Uuid;
+
+fn register_user(username: String, hash: String) {
+    let mut connection = establish_connection();
+
+    let new_user = NewUser {
+        username: username.clone(),
+        hash: hash.clone(),
+    };
+
+    diesel::insert_into(crate::schema::user::table)
+        .values(&new_user)
+        .execute(&mut connection)
+        .expect("Error saving new user onto DB");
+    println!(
+        "Performed insert to database with username:{},hash:{}",
+        username, hash
+    );
+}
+
+fn _spew_all() {
+    let mut connection = establish_connection();
+    let users = crate::schema::user::table
+        .load::<User>(&mut connection)
+        .expect("Error loading humans");
+    println!("{:?}", users);
+}
+
+fn get_user_hash(username: String) -> Option<String> {
+    let mut connection = establish_connection();
+
+    let user: Result<User, _> = sql_query("SELECT * FROM user WHERE username = $1")
+        .bind::<diesel::sql_types::Text, _>(username)
+        .get_result(&mut connection);
+
+    match user {
+        Ok(user) => Some(user.hash),
+        Err(_) => None,
+    }
+}
 
 pub fn do_server() {
     println!("generating keypairs...");
@@ -197,7 +239,11 @@ pub fn do_server() {
         if let Ok(packet) = rx.try_recv() {
             match packet.0 {
                 Packet::Auth(username, passwd) => {
-                    if !username.chars().all(char::is_alphanumeric) || username.len() > 16 {
+                    if !username.chars().all(char::is_alphanumeric)
+                        || username.len() > 16
+                        || !passwd.chars().all(|x| char::is_ascii_hexdigit(&x))
+                        || passwd.len() != 128
+                    {
                         send(
                             &mut clients,
                             Packet::ServerDM(
@@ -205,16 +251,41 @@ pub fn do_server() {
                             ),
                             &packet.1 .uuid,
                         );
-                        kick(&mut clients, &packet.1.uuid)
+                        kick(&mut clients, &packet.1.uuid);
                     } else {
                         authenticate(&mut clients, &packet.1.uuid, &username);
-                        println!(
-                            "Authenticated {} to {} with password {}",
-                            packet.1.uuid.to_string().magenta(),
-                            username.green(),
-                            passwd.red()
-                        );
-                        broadcast(&mut clients, Packet::Join(username), &Uuid::nil());
+
+                        let valid = match get_user_hash(username.clone()) {
+                            Some(hash) => {
+                                if passwd == hash {
+                                    println!("{} is an old timer, actually", username);
+                                    true
+                                } else {
+                                    send(
+                                        &mut clients,
+                                        Packet::ServerDM(
+                                            "Incorrect password. you are kicked".to_string(),
+                                        ),
+                                        &packet.1.uuid,
+                                    );
+                                    kick(&mut clients, &packet.1.uuid);
+                                    false
+                                }
+                            }
+                            None => {
+                                println!("{} is a new user!", username);
+                                register_user(username.clone(), passwd.clone());
+                                true
+                            }
+                        };
+                        if valid {
+                            println!(
+                                "Authenticated {} to {}",
+                                packet.1.uuid.to_string().magenta(),
+                                username.green()
+                            );
+                            broadcast(&mut clients, Packet::Join(username), &Uuid::nil());
+                        }
                     }
                 }
                 Packet::ClientMessage(msg) => {
