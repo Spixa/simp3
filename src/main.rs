@@ -10,10 +10,11 @@ mod server;
 mod types;
 mod util;
 
-use crate::util::ask;
+use crate::{db_model::establish_connection, util::ask};
 use colored::Colorize;
 
 fn main() {
+    let _ = establish_connection();
     let answer = ask("server or client: ");
 
     match answer.to_lowercase().as_str() {
