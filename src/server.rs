@@ -8,6 +8,7 @@ use colored::Colorize;
 use diesel::prelude::*;
 use diesel::sql_query;
 use stcp::{bincode, AesPacket, StcpServer};
+use std::env;
 use std::{
     io::{ErrorKind, Read, Write},
     sync::{
@@ -58,6 +59,11 @@ fn get_user_hash(username: String) -> Option<String> {
 }
 
 pub fn do_server() {
+    let _ = establish_connection();
+    println!(
+        "database detected ({})",
+        env::var("DATABASE_URL").expect("DATABASE_URL env value not set" /* unreachable */)
+    );
     println!("generating keypairs...");
     let server = StcpServer::bind("0.0.0.0:37549").unwrap();
     println!("server running on port 37549");
