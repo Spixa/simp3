@@ -109,8 +109,8 @@ pub fn do_server() {
 
             send(
                 &mut clients,
-                Packet::ServerDM(
-                    String::from_utf8(include_bytes!("welcome.txt").to_vec()).unwrap(),
+                Packet::ClientRespone(
+                    String::from_utf8(include_bytes!("config/welcome.txt").to_vec()).unwrap(),
                 ),
                 &uuid,
             );
@@ -301,7 +301,7 @@ pub fn do_server() {
                 }
                 Packet::ServerCommand(command) => {
                     println!("Received {}", command);
-                    let (cmd, content) = command.split_once(' ').unwrap_or(("L", "boz"));
+                    let (cmd, content) = command.split_once(' ').unwrap_or((&command, ""));
 
                     match cmd {
                         "/ssc" => {
@@ -312,6 +312,45 @@ pub fn do_server() {
                                 Packet::Broadcast(content.to_string()),
                                 &Uuid::nil(),
                             )
+                        }
+                        "/version" => {
+                            println!("Version issued");
+                            send(
+                                &mut clients,
+                                Packet::ClientRespone(
+                                    String::from_utf8(
+                                        include_bytes!("config/version.txt").to_vec(),
+                                    )
+                                    .unwrap(),
+                                ),
+                                &packet.1.uuid,
+                            );
+                        }
+                        "/leave" => {
+                            send(
+                                &mut clients,
+                                Packet::ClientRespone("Goodbye, good sir.".to_string()),
+                                &packet.1.uuid,
+                            );
+                            kick(&mut clients, &packet.1.uuid);
+                        }
+                        "/help" => {
+                            send(
+                                &mut clients,
+                                Packet::ClientRespone(
+                                    String::from_utf8(include_bytes!("config/help.txt").to_vec())
+                                        .unwrap(),
+                                ),
+                                &packet.1.uuid,
+                            );
+                        }
+                        "/list" => {
+                            let response = list_clients(&mut clients);
+                            send(
+                                &mut clients,
+                                Packet::ClientRespone(response),
+                                &packet.1.uuid,
+                            );
                         }
                         &_ => {
                             send(
@@ -359,7 +398,45 @@ fn authenticate(clients: &mut ClientVec, who: &Uuid, to: &String) {
         });
 }
 
+fn list_clients(clients: &mut ClientVec) -> String {
+    let mut clients = (*clients).lock().unwrap();
+
+    let registered = clients
+        .iter_mut()
+        .filter(|x| x.auth.auth_status != AuthStatus::Unauth)
+        .collect::<Vec<&mut Client>>();
+    let mut names: Vec<String> = vec![];
+
+    for x in registered {
+        if let AuthStatus::Authed(uname) = &x.auth.auth_status {
+            names.push(uname.to_string());
+        }
+    }
+
+    names
+        .iter()
+        .map(|x| x.to_string() + ",")
+        .collect::<String>()
+}
+
 fn kick(clients: &mut ClientVec, who: &Uuid) {
+    let mut uname = String::new();
+    {
+        let mut clients = (*clients).lock().unwrap();
+        let auth_status = &clients
+            .iter_mut()
+            .filter(|x| x.auth.uuid == *who)
+            .collect::<Vec<&mut Client>>();
+        let auth_status = &auth_status.first().unwrap().auth.auth_status;
+
+        if let AuthStatus::Authed(uname_) = auth_status.clone() {
+            uname = uname_
+        }
+    }
+    if !uname.is_empty() {
+        broadcast(clients, Packet::Leave(uname), who);
+    }
+
     let mut clients = (*clients).lock().unwrap();
     clients.retain(|x| x.auth.uuid != *who);
 }

@@ -1,0 +1,7 @@
+Version page for standard simp3 server:
+version: simp3-indev
+api: 3
+support: 
+    aes-gcm/256 encryption
+    RSA4096 pubkey cryptography 
+    As of yet, passwords are only hashed and UNSALTED and with a SYMMETRIC ENCRYPTION METHOD (not deemed safe) 

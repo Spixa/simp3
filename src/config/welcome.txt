@@ -1,0 +1,4 @@
+Welcome page for standard simp3 server:
+Another simp3 server. Type /help for guidance
+Rest assured there's no eavesdroppers or shadow users listening in on this conversation other than the ones in /list
+Unless this is a modified server binary, then there's no guarantee. (Also, /version output can be falsified)  

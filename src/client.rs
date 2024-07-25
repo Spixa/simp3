@@ -91,7 +91,7 @@ pub fn do_client() {
                     Packet::ClientRespone(response) => {
                         println!(
                             "{}{} {}",
-                            "Your previous command returned".green(),
+                            "Server >>".green(),
                             ":".yellow(),
                             response.white()
                         )
