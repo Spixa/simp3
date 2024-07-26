@@ -4,4 +4,4 @@ api: 3
 support: 
     aes-gcm/256 encryption
     RSA4096 pubkey cryptography 
-    As of yet, passwords are only hashed and UNSALTED and with a SYMMETRIC ENCRYPTION METHOD (not deemed safe) 
+    As of yet, passwords are only hashed and UNSALTED and with a SYMMETRIC ENCRYPTION METHOD (deemed unsafe) 
