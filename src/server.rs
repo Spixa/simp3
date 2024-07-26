@@ -1,3 +1,4 @@
+use crate::ask;
 use crate::{
     db_model::{establish_connection, NewUser, User},
     net::{decode_packet, encode_packet},
@@ -64,9 +65,10 @@ pub fn do_server() {
         "database detected ({})",
         env::var("DATABASE_URL").expect("DATABASE_URL env value not set" /* unreachable */)
     );
+    let port = ask("Enter port: ");
     println!("generating keypairs...");
-    let server = StcpServer::bind("0.0.0.0:37549").unwrap();
-    println!("server running on port 37549");
+    let server = StcpServer::bind(format!("0.0.0.0:{}", port)).unwrap();
+    println!("server running on port {}", port);
 
     server
         .listener
@@ -302,9 +304,11 @@ pub fn do_server() {
                     }
                 }
                 Packet::ServerCommand(command) => {
-                    println!("Received {}", command);
                     let (cmd, content) = command.split_once(' ').unwrap_or((&command, ""));
+                    let caster = find_name(&mut clients, packet.1.uuid)
+                        .unwrap_or("INVALID_USER".to_string());
 
+                    println!("{} has cast the command: {}", caster, command);
                     match cmd {
                         "/ssc" => {
                             // super secret command
@@ -347,7 +351,15 @@ pub fn do_server() {
                             );
                         }
                         "/kick" => {
-                            if !content.is_empty() {
+                            if caster == *content {
+                                send(
+                                    &mut clients,
+                                    Packet::ClientRespone(
+                                        "You can't kick yourself, bozo.".to_string(),
+                                    ),
+                                    &packet.1.uuid,
+                                );
+                            } else if !content.is_empty() {
                                 match find_uuid(&mut clients, content.to_string()) {
                                     Some(uuid) => {
                                         kick(&mut clients, &uuid);
@@ -366,6 +378,8 @@ pub fn do_server() {
                                             Packet::ClientRespone("You were kicked".to_string()),
                                             &uuid,
                                         );
+
+                                        println!("{} kicked {}", caster, content);
                                     }
                                     None => {
                                         send(
@@ -375,6 +389,10 @@ pub fn do_server() {
                                                 content
                                             )),
                                             &packet.1.uuid,
+                                        );
+                                        println!(
+                                            "{} tried kicking the non-existant \"{}\"",
+                                            caster, content
                                         );
                                     }
                                 }
@@ -460,6 +478,25 @@ fn find_uuid(clients: &mut ClientVec, alias: String) -> Option<Uuid> {
     }
 
     query.first().copied()
+}
+
+fn find_name(clients: &mut ClientVec, uuid: Uuid) -> Option<String> {
+    let mut clients = (*clients).lock().unwrap();
+    let user = clients
+        .iter_mut()
+        .filter(|x| x.auth.uuid == uuid)
+        .collect::<Vec<&mut Client>>();
+
+    match user.first() {
+        Some(client) => {
+            if let AuthStatus::Authed(uname) = &client.auth.auth_status {
+                Some(uname.clone())
+            } else {
+                None
+            }
+        }
+        None => None,
+    }
 }
 
 fn list_clients(clients: &mut ClientVec) -> String {

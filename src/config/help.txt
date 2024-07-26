@@ -1,7 +1,7 @@
 Help page for standard simp3 server:
-/help: shows this page
-/version: shows server version
-/ssc: super secret command (it is useful for broadcasting without an alias)
-/leave: remove yourself from the server
-/list: list of users online
-/kick <username>: kick someone out of the server
+    /help: shows this page
+    /version: shows server version
+    /ssc: super secret command (it is useful for broadcasting without an alias)
+    /leave: remove yourself from the server
+    /list: list of users online
+    /kick <username>: kick someone out of the server
