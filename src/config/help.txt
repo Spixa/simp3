@@ -4,3 +4,4 @@ Help page for standard simp3 server:
 /ssc: super secret command (it is useful for broadcasting without an alias)
 /leave: remove yourself from the server
 /list: list of users online
+/kick <username>: kick someone out of the server
