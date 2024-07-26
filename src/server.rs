@@ -247,15 +247,17 @@ pub fn do_server() {
                 Packet::Auth(username, passwd) => {
                     if !username.chars().all(char::is_alphanumeric)
                         || username.len() > 16
+                        || username.is_empty()
                         || !passwd.chars().all(|x| char::is_ascii_hexdigit(&x))
                         || passwd.len() != 128
                     {
                         send(
                             &mut clients,
-                            Packet::ServerDM(
-                                "Your username is NOT alphanumeric. You shall be wiped from this earth".to_string(),
+                            Packet::ClientRespone(
+                                String::from_utf8(include_bytes!("config/early_kick.txt").to_vec())
+                                    .unwrap(),
                             ),
-                            &packet.1 .uuid,
+                            &packet.1.uuid,
                         );
                         kick(&mut clients, &packet.1.uuid);
                     } else {
@@ -344,6 +346,48 @@ pub fn do_server() {
                                 &packet.1.uuid,
                             );
                         }
+                        "/kick" => {
+                            if !content.is_empty() {
+                                match find_uuid(&mut clients, content.to_string()) {
+                                    Some(uuid) => {
+                                        kick(&mut clients, &uuid);
+
+                                        send(
+                                            &mut clients,
+                                            Packet::ClientRespone(format!(
+                                                "You successfully kicked {}",
+                                                content
+                                            )),
+                                            &packet.1.uuid,
+                                        );
+
+                                        send(
+                                            &mut clients,
+                                            Packet::ClientRespone("You were kicked".to_string()),
+                                            &uuid,
+                                        );
+                                    }
+                                    None => {
+                                        send(
+                                            &mut clients,
+                                            Packet::ClientRespone(format!(
+                                                "Did not find \"{}\". Are they online?",
+                                                content
+                                            )),
+                                            &packet.1.uuid,
+                                        );
+                                    }
+                                }
+                            } else {
+                                send(
+                                    &mut clients,
+                                    Packet::ClientRespone(
+                                        "Invalid syntax. Try /kick <username>".to_string(),
+                                    ),
+                                    &packet.1.uuid,
+                                );
+                            }
+                        }
                         "/list" => {
                             let response = list_clients(&mut clients);
                             send(
@@ -356,7 +400,7 @@ pub fn do_server() {
                             send(
                                 &mut clients,
                                 Packet::ClientRespone(
-                                    "I received your command - best regards, Server".to_string(),
+                                    "Unknown command. Type /help for help".to_string(),
                                 ),
                                 &packet.1.uuid,
                             );
@@ -397,6 +441,26 @@ fn authenticate(clients: &mut ClientVec, who: &Uuid, to: &String) {
             };
         });
 }
+fn find_uuid(clients: &mut ClientVec, alias: String) -> Option<Uuid> {
+    let mut query: Vec<Uuid> = vec![];
+    {
+        let mut clients = (*clients).lock().unwrap();
+        let registered = clients
+            .iter_mut()
+            .filter(|x| x.auth.auth_status != AuthStatus::Unauth)
+            .collect::<Vec<&mut Client>>();
+
+        for x in registered {
+            if let AuthStatus::Authed(uname) = &x.auth.auth_status {
+                if *uname == alias {
+                    query.push(x.auth.uuid);
+                }
+            }
+        }
+    }
+
+    query.first().copied()
+}
 
 fn list_clients(clients: &mut ClientVec) -> String {
     let mut clients = (*clients).lock().unwrap();
@@ -428,12 +492,12 @@ fn kick(clients: &mut ClientVec, who: &Uuid) {
             .filter(|x| x.auth.uuid == *who)
             .collect::<Vec<&mut Client>>();
         let auth_status = &auth_status.first().unwrap().auth.auth_status;
-
         if let AuthStatus::Authed(uname_) = auth_status.clone() {
             uname = uname_
         }
     }
     if !uname.is_empty() {
+        println!("{} <client> was kicked.", uname);
         broadcast(clients, Packet::Leave(uname), who);
     }
 

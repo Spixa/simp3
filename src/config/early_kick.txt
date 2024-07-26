@@ -1,0 +1,8 @@
+You were kicked before you can be authenticated for one (or a few) of the following reasons:
+    End-user related:
+        * Your username is not alphanumeric
+        * Your username is empty
+        * Your username exceeds 16 characters (.len() > 16)
+    Client related:
+        * Your hashed password is not in hexadecimal (client's fault)
+        * Your hashed password is not a valid SHA512 hash (client's fault)
