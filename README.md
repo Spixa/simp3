@@ -7,11 +7,12 @@ There will be a complete specification manual for those who want to make their o
 The simp v3 server will have all the features that simp v2 and simp v1 had and also will mostly inherit the same handshake and post-kex communication process
 
 ### The features that are inherited from v2 and v1 are:
-####Commands
+
+#### Commands
 All the previous basic commands have been implemented.
-####Authentication
+#### Authentication
 The handshake process has been re-implemented in rust with better security.
-####Encryption
+#### Encryption
 All messages are encrypted with AES-GCM/256
 
 #### Handshake process
