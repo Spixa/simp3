@@ -1,0 +1,2 @@
+You were kicked before you can be authenticated for one (or a few) of the following reasons:
+    * Username is already online on the network you are connecting to

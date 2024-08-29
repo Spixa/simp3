@@ -256,15 +256,23 @@ pub fn do_server() {
                         send(
                             &mut clients,
                             Packet::ClientRespone(
-                                String::from_utf8(include_bytes!("config/early_kick.txt").to_vec())
+                                String::from_utf8(include_bytes!("config/kick/generic.txt").to_vec())
+                                    .unwrap(),
+                            ),
+                            &packet.1.uuid,
+                        );
+                        kick(&mut clients, &packet.1.uuid);
+                    } else if list_clients(&mut clients).contains(&username) {
+                        send(
+                            &mut clients,
+                            Packet::ClientRespone(
+                                String::from_utf8(include_bytes!("config/kick/name_exists.txt").to_vec())
                                     .unwrap(),
                             ),
                             &packet.1.uuid,
                         );
                         kick(&mut clients, &packet.1.uuid);
                     } else {
-                        authenticate(&mut clients, &packet.1.uuid, &username);
-
                         let valid = match get_user_hash(username.clone()) {
                             Some(hash) => {
                                 if passwd == hash {
@@ -289,6 +297,7 @@ pub fn do_server() {
                             }
                         };
                         if valid {
+                            authenticate(&mut clients, &packet.1.uuid, &username);
                             println!(
                                 "Authenticated {} to {}",
                                 packet.1.uuid.to_string().magenta(),
@@ -350,6 +359,15 @@ pub fn do_server() {
                                 &packet.1.uuid,
                             );
                         }
+                        "/ban" => {
+                            send(
+                                &mut clients,
+                                Packet::ClientRespone(
+                                    "I am told you don't possess such power.".to_string(),
+                                ),
+                                &packet.1.uuid,
+                            );
+                        }
                         "/kick" => {
                             if caster == *content {
                                 send(
@@ -407,7 +425,11 @@ pub fn do_server() {
                             }
                         }
                         "/list" => {
-                            let response = list_clients(&mut clients);
+                            let response = list_clients(&mut clients)
+                                .iter()
+                                .map(|x| x.to_string() + ",")
+                                .collect::<String>();
+
                             send(
                                 &mut clients,
                                 Packet::ClientRespone(response),
@@ -499,7 +521,7 @@ fn find_name(clients: &mut ClientVec, uuid: Uuid) -> Option<String> {
     }
 }
 
-fn list_clients(clients: &mut ClientVec) -> String {
+fn list_clients(clients: &mut ClientVec) -> Vec<String> {
     let mut clients = (*clients).lock().unwrap();
 
     let registered = clients
@@ -515,9 +537,6 @@ fn list_clients(clients: &mut ClientVec) -> String {
     }
 
     names
-        .iter()
-        .map(|x| x.to_string() + ",")
-        .collect::<String>()
 }
 
 fn kick(clients: &mut ClientVec, who: &Uuid) {
@@ -535,6 +554,11 @@ fn kick(clients: &mut ClientVec, who: &Uuid) {
     }
     if !uname.is_empty() {
         println!("{} <client> was kicked.", uname);
+        send(
+            clients,
+            Packet::ClientRespone("You were kicked.".to_string()),
+            who,
+        );
         broadcast(clients, Packet::Leave(uname), who);
     }
 
