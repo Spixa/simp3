@@ -1,20 +1,20 @@
 use crate::types::{Mode, Packet};
 
 fn _split_bytes<'a>(bs: &'a [u8], pred: &'a [u8]) -> Vec<&'a [u8]> {
-    let mut indexes: Vec<(usize, usize)> = Vec::new();
+    let mut indices: Vec<(usize, usize)> = Vec::new();
 
     for (index, el) in bs.windows(pred.len()).enumerate() {
         if el == pred {
-            indexes.push((index, index + pred.len()));
+            indices.push((index, index + pred.len()));
         }
     }
 
-    indexes.reverse();
+    indices.reverse();
 
     let mut cur = <&[u8]>::clone(&bs);
     let mut res: Vec<&[u8]> = Vec::new();
 
-    for (start, end) in indexes.iter().copied() {
+    for (start, end) in indices.iter().copied() {
         let (first_left, first_right) = cur.split_at(end);
         res.push(first_right);
 

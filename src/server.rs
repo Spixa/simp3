@@ -256,8 +256,10 @@ pub fn do_server() {
                         send(
                             &mut clients,
                             Packet::ClientRespone(
-                                String::from_utf8(include_bytes!("config/kick/generic.txt").to_vec())
-                                    .unwrap(),
+                                String::from_utf8(
+                                    include_bytes!("config/kick/generic.txt").to_vec(),
+                                )
+                                .unwrap(),
                             ),
                             &packet.1.uuid,
                         );
@@ -266,8 +268,10 @@ pub fn do_server() {
                         send(
                             &mut clients,
                             Packet::ClientRespone(
-                                String::from_utf8(include_bytes!("config/kick/name_exists.txt").to_vec())
-                                    .unwrap(),
+                                String::from_utf8(
+                                    include_bytes!("config/kick/name_exists.txt").to_vec(),
+                                )
+                                .unwrap(),
                             ),
                             &packet.1.uuid,
                         );
