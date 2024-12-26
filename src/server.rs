@@ -350,7 +350,8 @@ pub fn do_server() {
                             Some(uuid) => {
                                 let msg = format!("[{} -> {}]: \"{}\"", uname, to, msg);
 
-                                send(&mut clients, Packet::ClientRespone(msg), &uuid);
+                                send(&mut clients, Packet::ClientRespone(msg.clone()), &uuid);
+                                send(&mut clients, Packet::ClientRespone(msg), &packet.1.uuid);
                             }
                             None => {
                                 send(

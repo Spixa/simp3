@@ -191,10 +191,6 @@ fn handle_slash(msg: String) -> Packet {
         if msg.len() >= 4 {
             let dm_cmd = msg[4..].to_string();
             let (user, cont) = dm_cmd.split_once(' ').unwrap_or(("%nobody%", "%nothing%"));
-            println!(
-                "Attempting to contact server to send {} this: \"{}\"",
-                user, cont
-            );
             Packet::ClientDM(user.to_string(), cont.to_string())
         } else {
             println!("[client] internal command for DM is: /dm <uname> <content>");
