@@ -234,6 +234,7 @@ pub fn do_server() {
                             }
                         }
 
+                        // What is this even for? I forgot.
                         Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
 
                         Err(_) => {
@@ -339,6 +340,39 @@ pub fn do_server() {
                     // Unauth "sends" are discarded
                     if let AuthStatus::Authed(uname) = packet.1.auth_status {
                         broadcast(&mut clients, Packet::Message(msg, uname), &packet.1.uuid);
+                    }
+                }
+                Packet::Ping => {}
+                Packet::ClientDM(to, msg) => {
+                    // Unauth DMs are discarded
+                    if let AuthStatus::Authed(uname) = packet.1.auth_status {
+                        match find_uuid(&mut clients, to.clone()) {
+                            Some(uuid) => {
+                                let msg = format!("[{} -> {}]: \"{}\"", uname, to, msg);
+
+                                send(&mut clients, Packet::ClientRespone(msg), &uuid);
+                            }
+                            None => {
+                                send(
+                                    &mut clients,
+                                    Packet::ClientRespone(format!(
+                                        "Could not find {} for the life of me",
+                                        to
+                                    )),
+                                    &packet.1.uuid,
+                                );
+                                println!("Little FYI: {uname} just tried to talk to somebody who doesnt exist! isn't that rather funny?");
+                            }
+                        }
+                    } else {
+                        // Unauthed send
+                        send(
+                            &mut clients,
+                            Packet::ClientRespone(
+                                "You cannot send this sort of packet when unauthed".to_string(),
+                            ),
+                            &packet.1.uuid,
+                        );
                     }
                 }
                 Packet::ServerCommand(command) => {

@@ -113,7 +113,7 @@ pub fn do_client() {
         match rx.try_recv() {
             Ok(msg) => {
                 let packet = if msg.starts_with('/') {
-                    Packet::ServerCommand(msg)
+                    handle_slash(msg)
                 } else {
                     Packet::ClientMessage(msg)
                 };
@@ -184,4 +184,24 @@ fn format_broadcast(by: String, msg: String) {
         }
     }
     println!();
+}
+
+fn handle_slash(msg: String) -> Packet {
+    if msg.starts_with("/dm") {
+        if msg.len() >= 4 {
+            let dm_cmd = msg[4..].to_string();
+            let (user, cont) = dm_cmd.split_once(' ').unwrap_or(("%nobody%", "%nothing%"));
+            println!(
+                "Attempting to contact server to send {} this: \"{}\"",
+                user, cont
+            );
+            Packet::ClientDM(user.to_string(), cont.to_string())
+        } else {
+            println!("[client] internal command for DM is: /dm <uname> <content>");
+            Packet::Ping
+        }
+    } else {
+        // Everything else will be a "server-side" command
+        Packet::ServerCommand(msg)
+    }
 }

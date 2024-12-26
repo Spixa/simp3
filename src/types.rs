@@ -30,6 +30,7 @@ pub type ClientVec = Arc<Mutex<Vec<Client>>>;
 pub enum Packet {
     Message(String, String),
     ClientMessage(String),
+    ClientDM(String, String),
     Join(String),
     Leave(String),
     ServerCommand(String),
@@ -37,6 +38,7 @@ pub enum Packet {
     ServerDM(String),
     Broadcast(String),
     Auth(String, String),
+    Ping,
     _GracefulDisconnect,
     Illegal,
 }

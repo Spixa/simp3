@@ -47,6 +47,8 @@ pub fn decode_packet(buf: &[u8], mode: Mode) -> Packet {
         "7" => Packet::_GracefulDisconnect,
         "9" => Packet::Broadcast(strvec[1].clone()),
         "a" => Packet::Auth(strvec[1].clone(), strvec[2].clone()),
+        "b" => Packet::ClientDM(strvec[1].clone(), strvec[2].clone()),
+        "c" => Packet::Ping,
         _else => Packet::Illegal,
     };
 
@@ -77,6 +79,8 @@ pub fn encode_packet(packet: Packet) -> Vec<u8> {
         Packet::Auth(username, password) => {
             format!("a\x01{}\x01{}", username, password).into_bytes()
         }
+        Packet::ClientDM(to, msg) => format!("b\x01{}\x01{}", to, msg).into_bytes(),
+        Packet::Ping => "c".to_string().into_bytes(),
         Packet::_GracefulDisconnect => "7".to_string().into_bytes(),
         Packet::Illegal => panic!("You cannot send an illegal packet!"),
     }
