@@ -45,13 +45,3 @@ pub enum Mode {
     Client,
     Server,
 }
-
-pub struct _Arg {
-    pub name: String,
-    pub argument: String,
-}
-
-pub struct _Command {
-    pub name: String,
-    pub args: Vec<_Arg>,
-}

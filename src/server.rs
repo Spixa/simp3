@@ -20,6 +20,7 @@ use std::{
 };
 use uuid::Uuid;
 
+// TODO: move this to databse area
 fn register_user(username: String, hash: String) {
     let mut connection = establish_connection();
 
@@ -38,6 +39,7 @@ fn register_user(username: String, hash: String) {
     );
 }
 
+// Old helper function
 fn _spew_all() {
     let mut connection = establish_connection();
     let users = crate::schema::user::table
@@ -57,9 +59,12 @@ fn get_user_hash(username: String) -> Option<String> {
         Ok(user) => Some(user.hash),
         Err(_) => None,
     }
+
+    // Goodbye connection
 }
 
 pub fn do_server() {
+    // Serves to check database's validity
     let _ = establish_connection();
     println!(
         "database detected ({})",
@@ -79,6 +84,7 @@ pub fn do_server() {
 
     let (tx, rx) = mpsc::channel::<OwnedPacket>();
 
+    // server loop
     loop {
         if let Ok((mut socket, addr)) = server.listener.accept() {
             println!("{} connected", addr);
@@ -92,6 +98,7 @@ pub fn do_server() {
             };
             println!("KEX completed with {}", socket.peer_addr().unwrap());
 
+            // The original ones will be consumed by the Client vector, these are to be used within the client loops
             let _tx = tx.clone();
             let mut _aes = aes.clone();
 
@@ -109,6 +116,7 @@ pub fn do_server() {
                 });
             }
 
+            // Welcome message to the newly joined client
             send(
                 &mut clients,
                 Packet::ClientRespone(
@@ -117,6 +125,7 @@ pub fn do_server() {
                 &uuid,
             );
 
+            // Seperate thread for the new client
             thread::spawn({
                 let mut clients = Arc::clone(&clients);
                 move || loop {
@@ -124,6 +133,7 @@ pub fn do_server() {
 
                     match socket.read(&mut buff) {
                         Ok(size) => {
+                            // Ensure packet is an encrypted AES packet
                             let packet = match bincode::deserialize::<AesPacket>(&buff[..size]) {
                                 Ok(enc) => {
                                     let dec = enc.decrypt(&mut _aes);
@@ -140,17 +150,24 @@ pub fn do_server() {
                                 }
                             };
 
+                            // Obtain the username
                             let mut uname = String::new();
                             {
                                 let mut clients = (*clients).lock().unwrap();
+
+                                // Locate the client in the client vector for use
+                                // Here auth_status is actually just the client
                                 let auth_status = &clients
                                     .iter_mut()
                                     .filter(|x| x.auth.uuid == uuid)
                                     .collect::<Vec<&mut Client>>();
+
+                                // checking whether the client exists or not
                                 if auth_status.first().is_none() {
                                     break;
                                 }
 
+                                // Getting the actual auth_status
                                 let auth_status = &auth_status.first().unwrap().auth.auth_status;
 
                                 if let AuthStatus::Authed(uname_) = auth_status.clone() {
@@ -171,14 +188,19 @@ pub fn do_server() {
                                 break;
                             }
 
-                            print!("{}", format!("{:?}", packet).cyan());
-                            print!(" from {}", format!("{}", uuid).magenta());
-                            if uname.is_empty() {
-                                println!();
-                            } else {
-                                println!(" (AKA: {})", uname.green());
+                            // Format console message of the new packet
+                            {
+                                print!("{}", format!("{:?}", packet).cyan());
+                                print!(" from {}", format!("{}", uuid).magenta());
+                                if uname.is_empty() {
+                                    println!();
+                                } else {
+                                    println!(" (AKA: {})", uname.green());
+                                }
                             }
 
+                            // This block contains code for sending the packet over to the receiver channel
+                            // However before that we must check whether the user is authenticated or not
                             {
                                 let mut clients = (*clients).lock().unwrap();
 
@@ -250,8 +272,9 @@ pub fn do_server() {
                     if !username.chars().all(char::is_alphanumeric)
                         || username.len() > 16
                         || username.is_empty()
-                        || !passwd.chars().all(|x| char::is_ascii_hexdigit(&x))
+                        || !passwd.chars().all(|x| char::is_ascii_hexdigit(&x)) // Password must be a hash
                         || passwd.len() != 128
+                    // Further checking whether it is a hash or not
                     {
                         send(
                             &mut clients,
@@ -281,7 +304,7 @@ pub fn do_server() {
                             Some(hash) => {
                                 if passwd == hash {
                                     println!("{} is an old timer, actually", username);
-                                    true
+                                    true // This user already has a hash and it's matching with the one in DB
                                 } else {
                                     send(
                                         &mut clients,
@@ -291,16 +314,17 @@ pub fn do_server() {
                                         &packet.1.uuid,
                                     );
                                     kick(&mut clients, &packet.1.uuid);
-                                    false
+                                    false // Hash is invalid, for the user that they request
                                 }
                             }
                             None => {
                                 println!("{} is a new user!", username);
                                 register_user(username.clone(), passwd.clone());
-                                true
+                                true // Hash is brand new
                             }
                         };
                         if valid {
+                            // This check might be unnecessary
                             authenticate(&mut clients, &packet.1.uuid, &username);
                             println!(
                                 "Authenticated {} to {}",
@@ -312,6 +336,7 @@ pub fn do_server() {
                     }
                 }
                 Packet::ClientMessage(msg) => {
+                    // Unauth "sends" are discarded
                     if let AuthStatus::Authed(uname) = packet.1.auth_status {
                         broadcast(&mut clients, Packet::Message(msg, uname), &packet.1.uuid);
                     }
