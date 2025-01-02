@@ -5,3 +5,5 @@ Help page for standard simp3 server:
     /leave: remove yourself from the server
     /list: list of users online
     /kick <username>: kick someone out of the server
+    /join <channel>: join the channel given
+    /list_channels: get a list of channels created on this server

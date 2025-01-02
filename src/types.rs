@@ -7,6 +7,7 @@ use aes_gcm::Aes256Gcm;
 use uuid::Uuid;
 
 pub const LOCAL: &str = "127.0.0.1:37549";
+pub const MAIN_CHANNEL: &str = "main";
 pub const MSG_SIZE: usize = 16384;
 
 #[derive(Clone, PartialEq)]
@@ -28,7 +29,7 @@ pub type ClientVec = Arc<Mutex<Vec<Client>>>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Packet {
-    Message(String, String),
+    Message(String, String, String),
     ClientMessage(String),
     ClientDM(String, String),
     Join(String),

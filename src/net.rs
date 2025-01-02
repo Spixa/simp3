@@ -36,7 +36,9 @@ pub fn decode_packet(buf: &[u8], mode: Mode) -> Packet {
 
     let res = match strvec[0].as_str() {
         "0" => match mode {
-            Mode::Client => Packet::Message(strvec[1].clone(), strvec[2].clone()),
+            Mode::Client => {
+                Packet::Message(strvec[1].clone(), strvec[2].clone(), strvec[3].clone())
+            }
             Mode::Server => Packet::ClientMessage(strvec[1].clone()),
         },
         "1" => Packet::Join(strvec[1].clone()),
@@ -66,8 +68,8 @@ pub fn decode_packet(buf: &[u8], mode: Mode) -> Packet {
 
 pub fn encode_packet(packet: Packet) -> Vec<u8> {
     match packet {
-        Packet::Message(content, username) => {
-            format!("0\x01{}\x01{}", content, username).into_bytes()
+        Packet::Message(content, username, channel) => {
+            format!("0\x01{}\x01{}\x01{}", content, username, channel).into_bytes()
         }
         Packet::ClientMessage(content) => format!("0\x01{}", content).into_bytes(),
         Packet::Join(username) => format!("1\x01{}", username).into_bytes(),

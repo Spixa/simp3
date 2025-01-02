@@ -2,7 +2,9 @@ use crate::ask;
 use crate::{
     db_model::{establish_connection, NewUser, User},
     net::{decode_packet, encode_packet},
-    types::{Auth, AuthStatus, Client, ClientVec, Mode, OwnedPacket, Packet, MSG_SIZE},
+    types::{
+        Auth, AuthStatus, Client, ClientVec, Mode, OwnedPacket, Packet, MAIN_CHANNEL, MSG_SIZE,
+    },
     util::sleep,
 };
 use colored::Colorize;
@@ -11,6 +13,7 @@ use diesel::sql_query;
 use stcp::{bincode, AesPacket, StcpServer};
 use std::env;
 use std::{
+    collections::HashMap,
     io::{ErrorKind, Read, Write},
     sync::{
         mpsc::{self},
@@ -63,6 +66,33 @@ fn get_user_hash(username: String) -> Option<String> {
     // Goodbye connection
 }
 
+struct Channel {
+    _name: String,
+    members: Vec<Uuid>,
+}
+
+impl Channel {
+    fn new(_name: String) -> Self {
+        Self {
+            _name,
+            members: Vec::new(),
+        }
+    }
+
+    fn add_member(&mut self, member: Uuid) {
+        self.members.push(member);
+    }
+
+    fn remove_member(&mut self, member: &Uuid) {
+        self.members.retain(|m| m != member);
+    }
+}
+
+struct ServerState {
+    channels: HashMap<String, Channel>,
+    client_channels: HashMap<Uuid, String>, // store client-to-channel mapping
+}
+
 pub fn do_server() {
     // Serves to check database's validity
     let _ = establish_connection();
@@ -81,6 +111,10 @@ pub fn do_server() {
         .expect("failed to initialize non-blocking");
 
     let mut clients: ClientVec = Arc::new(Mutex::new(vec![]));
+    let mut server_state = Arc::new(Mutex::new(ServerState {
+        channels: HashMap::new(),
+        client_channels: HashMap::new(),
+    }));
 
     let (tx, rx) = mpsc::channel::<OwnedPacket>();
 
@@ -125,9 +159,12 @@ pub fn do_server() {
                 &uuid,
             );
 
+            join_or_create(&mut clients, uuid, "auth".to_string(), &mut server_state);
+
             // Seperate thread for the new client
             thread::spawn({
                 let mut clients = Arc::clone(&clients);
+                let server_state = Arc::clone(&server_state);
                 move || loop {
                     let mut buff = [0_u8; MSG_SIZE];
 
@@ -184,7 +221,26 @@ pub fn do_server() {
                                     "Client sending illegal packet was kicked from the server"
                                 );
 
-                                eprintln!("closing connection with: {addr}");
+                                {
+                                    let mut clients = (*clients).lock().unwrap();
+                                    clients.retain(|client| client.auth.uuid != uuid);
+
+                                    let mut server_state = (*server_state).lock().unwrap();
+                                    if let Some(current_channel) =
+                                        server_state.client_channels.remove(&uuid)
+                                    {
+                                        // Remove the client from the channel as well
+                                        if let Some(channel) =
+                                            server_state.channels.get_mut(&current_channel)
+                                        {
+                                            println!(
+                                                "removed {uuid} from the channel they were in"
+                                            );
+                                            channel.remove_member(&uuid);
+                                        }
+                                    }
+                                }
+
                                 break;
                             }
 
@@ -257,6 +313,24 @@ pub fn do_server() {
                                 broadcast(&mut clients, Packet::Leave(uname), &uuid);
                             }
 
+                            {
+                                let mut clients = (*clients).lock().unwrap();
+                                clients.retain(|client| client.auth.uuid != uuid);
+
+                                let mut server_state = (*server_state).lock().unwrap();
+                                if let Some(current_channel) =
+                                    server_state.client_channels.remove(&uuid)
+                                {
+                                    // Remove the client from the channel as well
+                                    if let Some(channel) =
+                                        server_state.channels.get_mut(&current_channel)
+                                    {
+                                        println!("removed {uuid} from the channel they were in");
+                                        channel.remove_member(&uuid);
+                                    }
+                                }
+                            }
+
                             println!("closing connection with: {}", addr);
                             break;
                         }
@@ -325,7 +399,12 @@ pub fn do_server() {
                             }
                         };
                         if valid {
-                            // This check might be unnecessary
+                            join_or_create(
+                                &mut clients,
+                                packet.1.uuid,
+                                MAIN_CHANNEL.to_string(),
+                                &mut server_state,
+                            );
                             authenticate(&mut clients, &packet.1.uuid, &username);
                             println!(
                                 "Authenticated {} to {}",
@@ -339,7 +418,28 @@ pub fn do_server() {
                 Packet::ClientMessage(msg) => {
                     // Unauth "sends" are discarded
                     if let AuthStatus::Authed(uname) = packet.1.auth_status {
-                        broadcast(&mut clients, Packet::Message(msg, uname), &packet.1.uuid);
+                        let server_state = server_state.lock().unwrap();
+                        let uuid = packet.1.uuid;
+
+                        let client_channel = server_state.client_channels.get(&uuid).unwrap();
+
+                        if let Some(channel) = server_state.channels.get(client_channel) {
+                            for member_uuid in &channel.members {
+                                if *member_uuid != uuid {
+                                    send(
+                                        &mut clients,
+                                        Packet::Message(
+                                            msg.clone(),
+                                            uname.clone(),
+                                            client_channel.to_string(),
+                                        ),
+                                        member_uuid,
+                                    );
+                                }
+                            }
+                        }
+                        // build: no-channel mode
+                        // broadcast(&mut clients, Packet::Message(msg, uname, ), &packet.1.uuid);
                     }
                 }
                 Packet::Ping => {}
@@ -402,6 +502,26 @@ pub fn do_server() {
                                     )
                                     .unwrap(),
                                 ),
+                                &packet.1.uuid,
+                            );
+                        }
+                        "/join" => {
+                            join_or_create(
+                                &mut clients,
+                                packet.1.uuid,
+                                content.to_string(),
+                                &mut server_state,
+                            );
+                        }
+                        "/list_channels" => {
+                            let response = list_channels(&mut server_state)
+                                .iter()
+                                .map(|x| x.to_string() + ",")
+                                .collect::<String>();
+
+                            send(
+                                &mut clients,
+                                Packet::ClientRespone(response),
                                 &packet.1.uuid,
                             );
                         }
@@ -520,6 +640,39 @@ pub fn do_server() {
     }
 }
 
+// channel join/creation function
+fn join_or_create(
+    _clients: &mut ClientVec,
+    uuid: Uuid,
+    chan_name: String,
+    server_state: &mut Arc<Mutex<ServerState>>,
+) {
+    let mut server_state = server_state.lock().unwrap();
+
+    if let Some(current_channel) = server_state.client_channels.remove(&uuid) {
+        // Remove the client from the channel as well
+        if let Some(channel) = server_state.channels.get_mut(&current_channel) {
+            println!("removed {uuid} from the channel they were in");
+            channel.remove_member(&uuid);
+        }
+    }
+
+    if let Some(channel) = server_state.channels.get_mut(&chan_name) {
+        channel.add_member(uuid);
+        println!("{uuid} joined \"{chan_name}\"");
+    } else {
+        // Create a new channel
+        let mut new_channel = Channel::new(chan_name.clone());
+        new_channel.add_member(uuid);
+        server_state
+            .channels
+            .insert(chan_name.to_string(), new_channel);
+        println!("Created new channel \"{chan_name}\"");
+    }
+
+    server_state.client_channels.insert(uuid, chan_name.clone());
+}
+
 fn broadcast(clients: &mut ClientVec, packet: Packet, ignore: &Uuid) {
     let mut clients = (*clients).lock().unwrap();
     let packet = encode_packet(packet);
@@ -601,6 +754,18 @@ fn list_clients(clients: &mut ClientVec) -> Vec<String> {
     }
 
     names
+}
+
+
+fn list_channels(server_state: &mut  Arc<Mutex<ServerState>>) -> Vec<String> {
+    let server_state = server_state.lock().unwrap();
+    let mut channel_names: Vec<String> = Vec::new();
+
+    for (name, _) in &server_state.channels {
+        channel_names.push(name.clone());
+    }
+
+    channel_names
 }
 
 fn kick(clients: &mut ClientVec, who: &Uuid) {

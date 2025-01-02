@@ -79,8 +79,17 @@ pub fn do_client() {
                 let packet = decode_packet(&decrypted_data, Mode::Client);
 
                 match packet {
-                    Packet::Message(content, username) => {
-                        println!("{}{} {}", username.magenta(), ":".yellow(), content.green())
+                    Packet::Message(content, username, channel) => {
+                        println!(
+                            "{}{}{}{} {}{} {}",
+                            "[".bright_black(),
+                            "#".blue(),
+                            channel.bright_blue(),
+                            "]".bright_black(),
+                            username.magenta(),
+                            ":".yellow(),
+                            content.green()
+                        )
                     }
                     Packet::Join(username) => {
                         println!("{} {}", username.magenta(), "joined".yellow())
