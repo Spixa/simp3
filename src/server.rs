@@ -756,12 +756,11 @@ fn list_clients(clients: &mut ClientVec) -> Vec<String> {
     names
 }
 
-
-fn list_channels(server_state: &mut  Arc<Mutex<ServerState>>) -> Vec<String> {
+fn list_channels(server_state: &mut Arc<Mutex<ServerState>>) -> Vec<String> {
     let server_state = server_state.lock().unwrap();
     let mut channel_names: Vec<String> = Vec::new();
 
-    for (name, _) in &server_state.channels {
+    for name in server_state.channels.keys() {
         channel_names.push(name.clone());
     }
 
