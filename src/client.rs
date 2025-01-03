@@ -97,6 +97,28 @@ pub fn do_client() {
                     Packet::Leave(username) => {
                         println!("{} {}", username.magenta(), "left".yellow())
                     }
+                    Packet::ChannelJoin(username, channel) => {
+                        println!(
+                            "{}{}{}{} {} {}",
+                            "[".bright_black(),
+                            "#".blue(),
+                            channel.bright_blue(),
+                            "]".bright_black(),
+                            username.magenta(),
+                            "joined the channel".yellow()
+                        )
+                    }
+                    Packet::ChannelLeave(username, channel) => {
+                        println!(
+                            "{}{}{}{} {} {}",
+                            "[".bright_black(),
+                            "#".blue(),
+                            channel.bright_blue(),
+                            "]".bright_black(),
+                            username.magenta(),
+                            "left the channel".yellow()
+                        )
+                    }
                     Packet::ClientRespone(response) => {
                         println!(
                             "{}{} {}",

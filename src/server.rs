@@ -67,14 +67,14 @@ fn get_user_hash(username: String) -> Option<String> {
 }
 
 struct Channel {
-    _name: String,
+    name: String,
     members: Vec<Uuid>,
 }
 
 impl Channel {
-    fn new(_name: String) -> Self {
+    fn new(name: String) -> Self {
         Self {
-            _name,
+            name,
             members: Vec::new(),
         }
     }
@@ -153,7 +153,7 @@ pub fn do_server() {
             // Welcome message to the newly joined client
             send(
                 &mut clients,
-                Packet::ClientRespone(
+                &Packet::ClientRespone(
                     String::from_utf8(include_bytes!("config/welcome.txt").to_vec()).unwrap(),
                 ),
                 &uuid,
@@ -353,7 +353,7 @@ pub fn do_server() {
                     {
                         send(
                             &mut clients,
-                            Packet::ClientRespone(
+                            &Packet::ClientRespone(
                                 String::from_utf8(
                                     include_bytes!("config/kick/generic.txt").to_vec(),
                                 )
@@ -365,7 +365,7 @@ pub fn do_server() {
                     } else if list_clients(&mut clients).contains(&username) {
                         send(
                             &mut clients,
-                            Packet::ClientRespone(
+                            &Packet::ClientRespone(
                                 String::from_utf8(
                                     include_bytes!("config/kick/name_exists.txt").to_vec(),
                                 )
@@ -383,7 +383,7 @@ pub fn do_server() {
                                 } else {
                                     send(
                                         &mut clients,
-                                        Packet::ServerDM(
+                                        &Packet::ServerDM(
                                             "Incorrect password. you are kicked".to_string(),
                                         ),
                                         &packet.1.uuid,
@@ -428,7 +428,7 @@ pub fn do_server() {
                                 if *member_uuid != uuid {
                                     send(
                                         &mut clients,
-                                        Packet::Message(
+                                        &Packet::Message(
                                             msg.clone(),
                                             uname.clone(),
                                             client_channel.to_string(),
@@ -450,13 +450,13 @@ pub fn do_server() {
                             Some(uuid) => {
                                 let msg = format!("[{} -> {}]: \"{}\"", uname, to, msg);
 
-                                send(&mut clients, Packet::ClientRespone(msg.clone()), &uuid);
-                                send(&mut clients, Packet::ClientRespone(msg), &packet.1.uuid);
+                                send(&mut clients, &Packet::ClientRespone(msg.clone()), &uuid);
+                                send(&mut clients, &Packet::ClientRespone(msg), &packet.1.uuid);
                             }
                             None => {
                                 send(
                                     &mut clients,
-                                    Packet::ClientRespone(format!(
+                                    &Packet::ClientRespone(format!(
                                         "Could not find {} for the life of me",
                                         to
                                     )),
@@ -469,7 +469,7 @@ pub fn do_server() {
                         // Unauthed send
                         send(
                             &mut clients,
-                            Packet::ClientRespone(
+                            &Packet::ClientRespone(
                                 "You cannot send this sort of packet when unauthed".to_string(),
                             ),
                             &packet.1.uuid,
@@ -496,7 +496,7 @@ pub fn do_server() {
                             println!("Version issued");
                             send(
                                 &mut clients,
-                                Packet::ClientRespone(
+                                &Packet::ClientRespone(
                                     String::from_utf8(
                                         include_bytes!("config/version.txt").to_vec(),
                                     )
@@ -521,14 +521,14 @@ pub fn do_server() {
 
                             send(
                                 &mut clients,
-                                Packet::ClientRespone(response),
+                                &Packet::ClientRespone(response),
                                 &packet.1.uuid,
                             );
                         }
                         "/leave" => {
                             send(
                                 &mut clients,
-                                Packet::ClientRespone("Goodbye, good sir.".to_string()),
+                                &Packet::ClientRespone("Goodbye, good sir.".to_string()),
                                 &packet.1.uuid,
                             );
                             kick(&mut clients, &packet.1.uuid);
@@ -536,7 +536,7 @@ pub fn do_server() {
                         "/help" => {
                             send(
                                 &mut clients,
-                                Packet::ClientRespone(
+                                &Packet::ClientRespone(
                                     String::from_utf8(include_bytes!("config/help.txt").to_vec())
                                         .unwrap(),
                                 ),
@@ -546,7 +546,7 @@ pub fn do_server() {
                         "/ban" => {
                             send(
                                 &mut clients,
-                                Packet::ClientRespone(
+                                &Packet::ClientRespone(
                                     "I am told you don't possess such power.".to_string(),
                                 ),
                                 &packet.1.uuid,
@@ -556,7 +556,7 @@ pub fn do_server() {
                             if caster == *content {
                                 send(
                                     &mut clients,
-                                    Packet::ClientRespone(
+                                    &Packet::ClientRespone(
                                         "You can't kick yourself, bozo.".to_string(),
                                     ),
                                     &packet.1.uuid,
@@ -568,7 +568,7 @@ pub fn do_server() {
 
                                         send(
                                             &mut clients,
-                                            Packet::ClientRespone(format!(
+                                            &Packet::ClientRespone(format!(
                                                 "You successfully kicked {}",
                                                 content
                                             )),
@@ -577,7 +577,7 @@ pub fn do_server() {
 
                                         send(
                                             &mut clients,
-                                            Packet::ClientRespone("You were kicked".to_string()),
+                                            &Packet::ClientRespone("You were kicked".to_string()),
                                             &uuid,
                                         );
 
@@ -586,7 +586,7 @@ pub fn do_server() {
                                     None => {
                                         send(
                                             &mut clients,
-                                            Packet::ClientRespone(format!(
+                                            &Packet::ClientRespone(format!(
                                                 "Did not find \"{}\". Are they online?",
                                                 content
                                             )),
@@ -601,7 +601,7 @@ pub fn do_server() {
                             } else {
                                 send(
                                     &mut clients,
-                                    Packet::ClientRespone(
+                                    &Packet::ClientRespone(
                                         "Invalid syntax. Try /kick <username>".to_string(),
                                     ),
                                     &packet.1.uuid,
@@ -616,14 +616,14 @@ pub fn do_server() {
 
                             send(
                                 &mut clients,
-                                Packet::ClientRespone(response),
+                                &Packet::ClientRespone(response),
                                 &packet.1.uuid,
                             );
                         }
                         &_ => {
                             send(
                                 &mut clients,
-                                Packet::ClientRespone(
+                                &Packet::ClientRespone(
                                     "Unknown command. Type /help for help".to_string(),
                                 ),
                                 &packet.1.uuid,
@@ -642,7 +642,7 @@ pub fn do_server() {
 
 // channel join/creation function
 fn join_or_create(
-    _clients: &mut ClientVec,
+    clients: &mut ClientVec,
     uuid: Uuid,
     chan_name: String,
     server_state: &mut Arc<Mutex<ServerState>>,
@@ -654,11 +654,32 @@ fn join_or_create(
         if let Some(channel) = server_state.channels.get_mut(&current_channel) {
             println!("removed {uuid} from the channel they were in");
             channel.remove_member(&uuid);
+
+            // broadcast LeaveChannel if user has name
+            if let Some(name) = find_name(clients, uuid) {
+                broadcast_channel(
+                    clients,
+                    channel,
+                    &Packet::ChannelLeave(name, channel.name.clone()),
+                    Uuid::nil(),
+                );
+            }
         }
     }
 
     if let Some(channel) = server_state.channels.get_mut(&chan_name) {
         channel.add_member(uuid);
+
+        // broadcast JoinChannel if user has name
+        if let Some(name) = find_name(clients, uuid) {
+            broadcast_channel(
+                clients,
+                channel,
+                &Packet::ChannelJoin(name, chan_name.clone()),
+                Uuid::nil(),
+            );
+        }
+
         println!("{uuid} joined \"{chan_name}\"");
     } else {
         // Create a new channel
@@ -784,7 +805,7 @@ fn kick(clients: &mut ClientVec, who: &Uuid) {
         println!("{} <client> was kicked.", uname);
         send(
             clients,
-            Packet::ClientRespone("You were kicked.".to_string()),
+            &Packet::ClientRespone("You were kicked.".to_string()),
             who,
         );
         broadcast(clients, Packet::Leave(uname), who);
@@ -794,9 +815,17 @@ fn kick(clients: &mut ClientVec, who: &Uuid) {
     clients.retain(|x| x.auth.uuid != *who);
 }
 
-fn send(clients: &mut ClientVec, packet: Packet, to: &Uuid) {
+fn broadcast_channel(clients: &mut ClientVec, channel: &Channel, packet: &Packet, ignore: Uuid) {
+    for member_uuid in &channel.members {
+        if *member_uuid != ignore {
+            send(clients, packet, member_uuid);
+        }
+    }
+}
+
+fn send(clients: &mut ClientVec, packet: &Packet, to: &Uuid) {
     let mut clients = (*clients).lock().unwrap();
-    let packet = encode_packet(packet);
+    let packet = encode_packet(packet.clone());
 
     clients
         .iter_mut()

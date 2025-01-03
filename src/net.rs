@@ -51,6 +51,8 @@ pub fn decode_packet(buf: &[u8], mode: Mode) -> Packet {
         "a" => Packet::Auth(strvec[1].clone(), strvec[2].clone()),
         "b" => Packet::ClientDM(strvec[1].clone(), strvec[2].clone()),
         "c" => Packet::Ping,
+        "d" => Packet::ChannelJoin(strvec[1].clone(), strvec[2].clone()),
+        "e" => Packet::ChannelLeave(strvec[1].clone(), strvec[2].clone()),
         _else => Packet::Illegal,
     };
 
@@ -83,6 +85,12 @@ pub fn encode_packet(packet: Packet) -> Vec<u8> {
         }
         Packet::ClientDM(to, msg) => format!("b\x01{}\x01{}", to, msg).into_bytes(),
         Packet::Ping => "c".to_string().into_bytes(),
+        Packet::ChannelJoin(username, channel) => {
+            format!("d\x01{}\x01{}", username, channel).into_bytes()
+        }
+        Packet::ChannelLeave(username, channel) => {
+            format!("e\x01{}\x01{}", username, channel).into_bytes()
+        }
         Packet::_GracefulDisconnect => "7".to_string().into_bytes(),
         Packet::Illegal => panic!("You cannot send an illegal packet!"),
     }

@@ -27,7 +27,7 @@ pub struct Client {
 pub struct OwnedPacket(pub Packet, pub Auth);
 pub type ClientVec = Arc<Mutex<Vec<Client>>>;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Packet {
     Message(String, String, String),
     ClientMessage(String),
@@ -40,6 +40,8 @@ pub enum Packet {
     Broadcast(String),
     Auth(String, String),
     Ping,
+    ChannelJoin(String, String),
+    ChannelLeave(String, String),
     _GracefulDisconnect,
     Illegal,
 }
