@@ -3,7 +3,7 @@ use crate::{
     db_model::{establish_connection, NewUser, User},
     net::{decode_packet, encode_packet},
     types::{
-        Auth, AuthStatus, Client, ClientVec, Mode, OwnedPacket, Packet, MAIN_CHANNEL, MSG_SIZE,
+        Auth, AuthStatus, Client, ClientVec, Channel, Mode, OwnedPacket, Packet, ServerState, ServerStateGuard, MAIN_CHANNEL, MSG_SIZE,
     },
     util::sleep,
 };
@@ -64,35 +64,6 @@ fn get_user_hash(username: String) -> Option<String> {
     }
 
     // Goodbye connection
-}
-
-struct Channel {
-    name: String,
-    locked: bool,
-    members: Vec<Uuid>,
-}
-
-impl Channel {
-    fn new(name: String, locked: bool) -> Self {
-        Self {
-            name,
-            locked,
-            members: Vec::new(),
-        }
-    }
-
-    fn add_member(&mut self, member: Uuid) {
-        self.members.push(member);
-    }
-
-    fn remove_member(&mut self, member: &Uuid) {
-        self.members.retain(|m| m != member);
-    }
-}
-
-struct ServerState {
-    channels: HashMap<String, Channel>,
-    client_channels: HashMap<Uuid, String>, // store client-to-channel mapping
 }
 
 pub fn do_server() {
@@ -653,7 +624,7 @@ pub fn do_server() {
     }
 }
 
-fn create_channel(name: String, locked: bool, server_state: &mut Arc<Mutex<ServerState>>) {
+fn create_channel(name: String, locked: bool, server_state: &mut ServerStateGuard) {
     let mut server_state = server_state.lock().unwrap();
     let new_channel = Channel::new(name.clone(), locked);
 
@@ -669,7 +640,7 @@ fn join_or_create(
     clients: &mut ClientVec,
     uuid: Uuid,
     chan_name: String,
-    server_state: &mut Arc<Mutex<ServerState>>,
+    server_state: &mut ServerStateGuard,
 ) {
     let mut server_state = server_state.lock().unwrap();
 
@@ -813,7 +784,7 @@ fn list_clients(clients: &mut ClientVec) -> Vec<String> {
     names
 }
 
-fn list_channels(server_state: &mut Arc<Mutex<ServerState>>) -> Vec<String> {
+fn list_channels(server_state: &mut ServerStateGuard) -> Vec<String> {
     let server_state = server_state.lock().unwrap();
     let mut channel_names: Vec<String> = Vec::new();
 
