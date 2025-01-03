@@ -92,10 +92,10 @@ pub fn do_client() {
                         )
                     }
                     Packet::Join(username) => {
-                        println!("{} {}", username.magenta(), "joined".yellow())
+                        println!("{} {}", username.magenta(), "joined the server".yellow())
                     }
                     Packet::Leave(username) => {
-                        println!("{} {}", username.magenta(), "left".yellow())
+                        println!("{} {}", username.magenta(), "left the server".yellow())
                     }
                     Packet::ChannelJoin(username, channel) => {
                         println!(
