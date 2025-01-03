@@ -68,13 +68,15 @@ fn get_user_hash(username: String) -> Option<String> {
 
 struct Channel {
     name: String,
+    locked: bool,
     members: Vec<Uuid>,
 }
 
 impl Channel {
-    fn new(name: String) -> Self {
+    fn new(name: String, locked: bool) -> Self {
         Self {
             name,
+            locked,
             members: Vec::new(),
         }
     }
@@ -115,6 +117,9 @@ pub fn do_server() {
         channels: HashMap::new(),
         client_channels: HashMap::new(),
     }));
+
+    create_channel("auth".to_string(), true, &mut server_state);  
+    create_channel("admin".to_string(), true, &mut server_state);  
 
     let (tx, rx) = mpsc::channel::<OwnedPacket>();
 
@@ -421,7 +426,15 @@ pub fn do_server() {
                         let server_state = server_state.lock().unwrap();
                         let uuid = packet.1.uuid;
 
-                        let client_channel = server_state.client_channels.get(&uuid).unwrap();
+                        let client_channel = match server_state.client_channels.get(&uuid) {
+                            Some(channel) => channel,
+                            None => {
+                                send(&mut clients, 
+                                     &Packet::ClientRespone("You are not in any channel. (This must be a bug, report it)".to_string()), 
+                                     &uuid);
+                                continue;
+                            }
+                        };
 
                         if let Some(channel) = server_state.channels.get(client_channel) {
                             for member_uuid in &channel.members {
@@ -640,6 +653,16 @@ pub fn do_server() {
     }
 }
 
+fn create_channel(name: String, locked: bool, server_state: &mut Arc<Mutex<ServerState>>) {
+    let mut server_state = server_state.lock().unwrap();
+    let new_channel = Channel::new(name.clone(), locked);
+
+    println!("!!! Server issued creation of #{} which locked={}", name, locked);
+    server_state
+        .channels
+        .insert(name.to_string(), new_channel);
+}
+
 // channel join/creation function
 fn join_or_create(
     clients: &mut ClientVec,
@@ -668,6 +691,12 @@ fn join_or_create(
     }
 
     if let Some(channel) = server_state.channels.get_mut(&chan_name) {
+        // Ensure channel isn't locked
+        if channel.locked {
+            send(clients, &Packet::ServerDM(format!("{} is a locked channel", chan_name)), &uuid);
+            return;
+        }
+
         channel.add_member(uuid);
 
         // broadcast JoinChannel if user has name
@@ -682,8 +711,8 @@ fn join_or_create(
 
         println!("{uuid} joined \"{chan_name}\"");
     } else {
-        // Create a new channel
-        let mut new_channel = Channel::new(chan_name.clone());
+        // Create a new unlocked channel
+        let mut new_channel = Channel::new(chan_name.clone(), false);
         new_channel.add_member(uuid);
         server_state
             .channels
