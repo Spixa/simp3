@@ -339,7 +339,7 @@ pub fn do_server() {
                             ),
                             &packet.1.uuid,
                         );
-                        kick(&mut clients, &packet.1.uuid);
+                        kick(&mut clients, &packet.1.uuid, &mut server_state);
                     } else if list_clients(&mut clients).contains(&username) {
                         send(
                             &mut clients,
@@ -351,7 +351,7 @@ pub fn do_server() {
                             ),
                             &packet.1.uuid,
                         );
-                        kick(&mut clients, &packet.1.uuid);
+                        kick(&mut clients, &packet.1.uuid, &mut server_state);
                     } else {
                         let valid = match get_user_hash(username.clone()) {
                             Some(hash) => {
@@ -366,7 +366,7 @@ pub fn do_server() {
                                         ),
                                         &packet.1.uuid,
                                     );
-                                    kick(&mut clients, &packet.1.uuid);
+                                    kick(&mut clients, &packet.1.uuid, &mut server_state);
                                     false // Hash is invalid, for the user that they request
                                 }
                             }
@@ -517,7 +517,7 @@ pub fn do_server() {
                                 &Packet::ClientRespone("Goodbye, good sir.".to_string()),
                                 &packet.1.uuid,
                             );
-                            kick(&mut clients, &packet.1.uuid);
+                            kick(&mut clients, &packet.1.uuid, &mut server_state);
                         }
                         "/help" => {
                             send(
@@ -615,7 +615,7 @@ pub fn do_server() {
                             } else if !content.is_empty() {
                                 match find_uuid(&mut clients, content.to_string()) {
                                     Some(uuid) => {
-                                        kick(&mut clients, &uuid);
+                                        kick(&mut clients, &uuid, &mut server_state);
 
                                         send(
                                             &mut clients,
@@ -806,7 +806,7 @@ fn glist(clients: &mut ClientVec, server_state: &mut ServerStateGuard) -> String
     let server_state = server_state.lock().unwrap();
     let mut result = String::new();
 
-    result.push_str(&"Global list command");
+    result.push_str("Global list command");
 
     for (name, channel) in &server_state.channels {
         let mut list = String::new();
@@ -935,7 +935,9 @@ fn list_channels(server_state: &mut ServerStateGuard) -> Vec<String> {
     channel_names
 }
 
-fn kick(clients: &mut ClientVec, who: &Uuid) {
+fn kick(clients: &mut ClientVec, who: &Uuid, server_state: &mut ServerStateGuard) {
+    let mut server_state = server_state.lock().unwrap();
+
     let mut uname = String::new();
     {
         let mut clients = (*clients).lock().unwrap();
@@ -956,6 +958,14 @@ fn kick(clients: &mut ClientVec, who: &Uuid) {
             who,
         );
         broadcast(clients, Packet::Leave(uname), who);
+    }
+
+    if let Some(current_channel) = server_state.client_channels.remove(who) {
+        // Remove the client from the channel as well
+        if let Some(channel) = server_state.channels.get_mut(&current_channel) {
+            println!("removed {who} from the channel they were in");
+            channel.remove_member(who);
+        }
     }
 
     let mut clients = (*clients).lock().unwrap();
