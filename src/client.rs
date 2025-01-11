@@ -221,7 +221,7 @@ fn handle_slash(msg: String) -> Packet {
     if msg.starts_with("/dm") {
         if msg.len() >= 4 {
             let dm_cmd = msg[4..].to_string();
-            let (user, cont) = dm_cmd.split_once(' ').unwrap_or(("%nobody%", "%nothing%"));
+            let (user, cont) = dm_cmd.split_once(' ').unwrap_or((dm_cmd.as_str(), ""));
             Packet::ClientDM(user.to_string(), cont.to_string())
         } else {
             println!("[client] internal command for DM is: /dm <uname> <content>");

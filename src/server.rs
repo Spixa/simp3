@@ -783,11 +783,21 @@ fn channel_info(
     let server_state = server_state.lock().unwrap();
 
     if let Some(channel) = server_state.channels.get(&chan_name) {
-        // List users in channel:
-        let mut list = String::new();
+        // Pre-compute usernames for efficient lookup
+        let mut client_names: HashMap<Uuid, String> = HashMap::new();
+        {
+            let clients = (*clients).lock().unwrap();
+            for client in clients.iter() {
+                if let AuthStatus::Authed(ref name) = client.auth.auth_status {
+                    client_names.insert(client.auth.uuid, name.clone());
+                }
+            }
+        }
 
+        // Build the list of usernames in the channel
+        let mut list = String::new();
         for uuid in &channel.members {
-            if let Some(name) = find_name(clients, *uuid) {
+            if let Some(name) = client_names.get(uuid) {
                 list.push_str(&(name.as_str().to_owned() + ","));
             }
         }
@@ -803,27 +813,33 @@ fn channel_info(
 }
 
 fn glist(clients: &mut ClientVec, server_state: &mut ServerStateGuard) -> String {
-    let server_state = server_state.lock().unwrap();
     let mut result = String::new();
+    let mut client_names: HashMap<Uuid, String> = HashMap::new();
 
-    result.push_str("Global list command");
+    // 1. Build a HashMap of UUIDs to usernames in linear time
+    {
+        let clients = (*clients).lock().unwrap();
+        for client in clients.iter() {
+            if let AuthStatus::Authed(ref name) = client.auth.auth_status {
+                client_names.insert(client.auth.uuid, name.clone());
+            }
+        }
+    }
 
+    // 2. Iterate over channels and construct the list in linear time
+    let server_state = server_state.lock().unwrap();
     for (name, channel) in &server_state.channels {
         let mut list = String::new();
-
         for uuid in &channel.members {
-            if let Some(name) = find_name(clients, *uuid) {
+            if let Some(name) = client_names.get(uuid) {
                 list.push_str(&(name.as_str().to_owned() + ","));
             }
         }
         let list_size = &channel.members.len();
-
         let mut subresult = format!("\n#{}: ({})", name, list_size);
-
         if !list.is_empty() {
             subresult.push_str(format!("\n\t{}", list).as_str());
         }
-
         result.push_str(&subresult);
     }
 
