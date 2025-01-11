@@ -3,7 +3,8 @@ use crate::{
     db_model::{establish_connection, NewUser, User},
     net::{decode_packet, encode_packet},
     types::{
-        Auth, AuthStatus, Client, ClientVec, Channel, Mode, OwnedPacket, Packet, ServerState, ServerStateGuard, MAIN_CHANNEL, MSG_SIZE,
+        Auth, AuthStatus, Channel, Client, ClientVec, Mode, OwnedPacket, Packet, ServerState,
+        ServerStateGuard, MAIN_CHANNEL, MSG_SIZE,
     },
     util::sleep,
 };
@@ -14,6 +15,7 @@ use stcp::{bincode, AesPacket, StcpServer};
 use std::env;
 use std::{
     collections::HashMap,
+    fmt::Error,
     io::{ErrorKind, Read, Write},
     sync::{
         mpsc::{self},
@@ -536,6 +538,71 @@ pub fn do_server() {
                                 &packet.1.uuid,
                             );
                         }
+                        "/glist" => {
+                            let list = glist(&mut clients, &mut server_state);
+                            send(&mut clients, &Packet::ClientRespone(list), &packet.1.uuid);
+                        }
+                        "/channel" => {
+                            if let Some(channel_name) =
+                                get_channel_name(&mut server_state, packet.1.uuid)
+                            {
+                                if let Some(info) =
+                                    channel_info(&mut clients, channel_name, &mut server_state)
+                                {
+                                    send(
+                                        &mut clients,
+                                        &Packet::ClientRespone(info),
+                                        &packet.1.uuid,
+                                    );
+                                }
+                            }
+                        }
+                        "/lock" => {
+                            if let Some(channel_name) =
+                                get_channel_name(&mut server_state, packet.1.uuid)
+                            {
+                                if channel_name == "main" || channel_name == "auth" {
+                                    send(
+                                        &mut clients,
+                                        &Packet::ClientRespone(
+                                            "Error: this channel is protected".to_string(),
+                                        ),
+                                        &packet.1.uuid,
+                                    );
+                                } else {
+                                    match lock_channel(channel_name.clone(), &mut server_state) {
+                                        Ok(lock) => {
+                                            println!("{} is now locked={}", channel_name, lock);
+
+                                            send(
+                                                &mut clients,
+                                                &Packet::ClientRespone(format!(
+                                                    "Channel lock is now {}",
+                                                    lock
+                                                )),
+                                                &packet.1.uuid,
+                                            );
+                                        }
+                                        Err(_) => {
+                                            send(
+                                                &mut clients,
+                                                &Packet::ClientRespone(
+                                                    "An unknown error stopped this operation"
+                                                        .to_string(),
+                                                ),
+                                                &packet.1.uuid,
+                                            );
+                                        }
+                                    }
+                                }
+                            } else {
+                                send(
+                                    &mut clients,
+                                    &Packet::ClientRespone("You aren't in any channel".to_string()),
+                                    &packet.1.uuid,
+                                );
+                            }
+                        }
                         "/kick" => {
                             if caster == *content {
                                 send(
@@ -699,6 +766,79 @@ fn join_or_create(
     }
 
     server_state.client_channels.insert(uuid, chan_name.clone());
+}
+
+fn get_channel_name(server_state: &mut ServerStateGuard, uuid: Uuid) -> Option<String> {
+    let server_state = server_state.lock().unwrap();
+
+    server_state.client_channels.get(&uuid).cloned()
+}
+
+// Function has builtin formatter
+fn channel_info(
+    clients: &mut ClientVec,
+    chan_name: String,
+    server_state: &mut ServerStateGuard,
+) -> Option<String> {
+    let server_state = server_state.lock().unwrap();
+
+    if let Some(channel) = server_state.channels.get(&chan_name) {
+        // List users in channel:
+        let mut list = String::new();
+
+        for uuid in &channel.members {
+            if let Some(name) = find_name(clients, *uuid) {
+                list.push_str(&(name.as_str().to_owned() + ","));
+            }
+        }
+        let list_size = &channel.members.len();
+
+        Some(format!(
+            "! Channel information !\nChannel name: {}\nLock status: {}\nOnline users: ({}):\n\t{}",
+            channel.name, channel.locked, list_size, list
+        ))
+    } else {
+        None
+    }
+}
+
+fn glist(clients: &mut ClientVec, server_state: &mut ServerStateGuard) -> String {
+    let server_state = server_state.lock().unwrap();
+    let mut result = String::new();
+
+    result.push_str(&"Global list command");
+
+    for (name, channel) in &server_state.channels {
+        let mut list = String::new();
+
+        for uuid in &channel.members {
+            if let Some(name) = find_name(clients, *uuid) {
+                list.push_str(&(name.as_str().to_owned() + ","));
+            }
+        }
+        let list_size = &channel.members.len();
+
+        let mut subresult = format!("\n#{}: ({})", name, list_size);
+
+        if !list.is_empty() {
+            subresult.push_str(format!("\n\t{}", list).as_str());
+        }
+
+        result.push_str(&subresult);
+    }
+
+    result
+}
+
+fn lock_channel(chan_name: String, server_state: &mut ServerStateGuard) -> Result<bool, Error> {
+    let mut server_state = server_state.lock().unwrap();
+
+    if let Some(channel) = server_state.channels.get_mut(&chan_name) {
+        channel.locked = !channel.locked;
+        Ok(channel.locked)
+    } else {
+        Err(Error)
+    }
 }
 
 fn broadcast(clients: &mut ClientVec, packet: Packet, ignore: &Uuid) {

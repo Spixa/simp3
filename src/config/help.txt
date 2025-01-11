@@ -4,6 +4,9 @@ Help page for standard simp3 server:
     /ssc: super secret command (it is useful for broadcasting without an alias)
     /leave: remove yourself from the server
     /list: list of users online
+    /glist: list every user in every channel
+    /channel: get channel info
+    /lock: flip lock on a channel (except protected ones)
     /kick <username>: kick someone out of the server
     /join <channel>: join the channel given
     /list_channels: get a list of channels created on this server
