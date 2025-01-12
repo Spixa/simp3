@@ -465,7 +465,7 @@ pub fn do_server() {
                 Packet::ServerCommand(command) => {
                     let (cmd, content) = command.split_once(' ').unwrap_or((&command, ""));
                     let caster = find_name(&mut clients, packet.1.uuid)
-                        .unwrap_or("INVALID_USER".to_string());
+                        .unwrap_or("INVALID_USER".to_string()); 
 
                     println!("{} has cast the command: {}", caster, command);
                     match cmd {
@@ -498,6 +498,15 @@ pub fn do_server() {
                                 content.to_string(),
                                 &mut server_state,
                             );
+                        }
+                        "/me" => {
+                            if let Some(channel_name) = get_channel_name(&mut server_state, packet.1.uuid) {
+                                let server_state = server_state.lock().unwrap();
+
+                                if let Some(channel) = server_state.channels.get(&channel_name) {
+                                    broadcast_channel(&mut clients, channel, &Packet::ClientRespone(format!("* {} {}", caster, content)) , Uuid::nil());
+                                } 
+                            }
                         }
                         "/list_channels" => {
                             let response = list_channels(&mut server_state)
@@ -541,6 +550,13 @@ pub fn do_server() {
                         "/glist" => {
                             let list = glist(&mut clients, &mut server_state);
                             send(&mut clients, &Packet::ClientRespone(list), &packet.1.uuid);
+                        }
+                        "/motd" => {
+                            send(
+                                &mut clients,
+                                &Packet::Broadcast(create_motd(caster, &mut server_state)),
+                                &packet.1.uuid,
+                            );
                         }
                         "/channel" => {
                             if let Some(channel_name) =
@@ -602,6 +618,9 @@ pub fn do_server() {
                                     &packet.1.uuid,
                                 );
                             }
+                        }
+                        "/about" => {
+                            send(&mut clients, &Packet::ClientRespone("openSIMP 3.0 is a free and opensource instant messaging protocol written in Rust.\nIt's initials stand for \"S\"ecure \"I\"nstant \"M\"essaging \"P\"rotocol".to_string()), &packet.1.uuid);
                         }
                         "/kick" => {
                             if caster == *content {
@@ -812,6 +831,15 @@ fn channel_info(
     }
 }
 
+fn create_motd(uname: String, server_state: &mut ServerStateGuard) -> String {
+    let server_state = server_state.lock().unwrap();
+
+    let ccount = server_state.channels.len();
+    let ucount = server_state.client_channels.len();
+
+    format!("Hello, @{} welcome to this simp3 server. Local server time is {}. Type /help for help, /about for information about the server. There are {} users online in {} channels", uname, chrono::offset::Local::now().format("%l:%M %p"), ucount, ccount)
+}
+
 fn glist(clients: &mut ClientVec, server_state: &mut ServerStateGuard) -> String {
     let mut result = String::new();
     let mut client_names: HashMap<Uuid, String> = HashMap::new();
@@ -832,11 +860,11 @@ fn glist(clients: &mut ClientVec, server_state: &mut ServerStateGuard) -> String
         let mut list = String::new();
         for uuid in &channel.members {
             if let Some(name) = client_names.get(uuid) {
-                list.push_str(&(name.as_str().to_owned() + ","));
+                list.push_str(&(name.as_str().to_owned() + " "));
             }
         }
         let list_size = &channel.members.len();
-        let mut subresult = format!("\n#{}: ({})", name, list_size);
+        let mut subresult = format!("\n#{} ({}):", name, list_size);
         if !list.is_empty() {
             subresult.push_str(format!("\n\t{}", list).as_str());
         }

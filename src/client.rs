@@ -163,12 +163,21 @@ pub fn do_client() {
 
     println!("Write a Message");
 
+    // let mut iter = 0;
     loop {
         let sending = ask("");
         let msg = sending.trim().to_string();
         if msg == ":quit" || tx.send(msg).is_err() {
             break;
         }
+
+        // thread::sleep(Duration::from_secs(1));
+        // let _ = tx.send(format!("My #{} message", iter.clone())).is_err();
+        // iter += 1;
+
+        // if (iter % 10 == 0) {
+        //     let _ = tx.send(format!("/join channel_{}", (iter % 10).clone())).is_err();
+        // }
     }
     println!("bye bye");
 }
@@ -198,8 +207,13 @@ fn format_broadcast(by: String, msg: String) {
             print!("{} ", x.red());
         } else if x.parse::<i64>().is_ok() {
             print!("{} ", x.bright_magenta());
+        } else if x.matches(|c: char| c.is_ascii_digit() || c == ':').count() == 5 && x.len() == 5 {
+            // Check if x is in HH:MM format
+            print!("{} ", x.bright_magenta().bold());
         } else if x.starts_with('#') {
             print!("{} ", x.bright_blue());
+        } else if x.starts_with('@') {
+            print!("{} ", x.bright_cyan());
         } else if !x.split_once('.').unwrap_or((x, "")).1.is_empty() {
             print!("{} ", x.bright_green());
         } else if x.to_lowercase() == "spixa" {
