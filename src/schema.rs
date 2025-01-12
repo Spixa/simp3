@@ -5,5 +5,6 @@ diesel::table! {
         id -> Integer,
         username -> Text,
         hash -> Text,
+        banned -> Bool,
     }
 }

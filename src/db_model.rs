@@ -18,6 +18,7 @@ pub struct User {
     pub id: i32,
     pub username: String,
     pub hash: String,
+    pub banned: bool,
 }
 
 pub fn establish_connection() -> SqliteConnection {
