@@ -465,7 +465,7 @@ pub fn do_server() {
                 Packet::ServerCommand(command) => {
                     let (cmd, content) = command.split_once(' ').unwrap_or((&command, ""));
                     let caster = find_name(&mut clients, packet.1.uuid)
-                        .unwrap_or("INVALID_USER".to_string()); 
+                        .unwrap_or("INVALID_USER".to_string());
 
                     println!("{} has cast the command: {}", caster, command);
                     match cmd {
@@ -500,12 +500,19 @@ pub fn do_server() {
                             );
                         }
                         "/me" => {
-                            if let Some(channel_name) = get_channel_name(&mut server_state, packet.1.uuid) {
+                            if let Some(channel_name) =
+                                get_channel_name(&mut server_state, packet.1.uuid)
+                            {
                                 let server_state = server_state.lock().unwrap();
 
                                 if let Some(channel) = server_state.channels.get(&channel_name) {
-                                    broadcast_channel(&mut clients, channel, &Packet::ClientRespone(format!("* {} {}", caster, content)) , Uuid::nil());
-                                } 
+                                    broadcast_channel(
+                                        &mut clients,
+                                        channel,
+                                        &Packet::ClientRespone(format!("* {} {}", caster, content)),
+                                        Uuid::nil(),
+                                    );
+                                }
                             }
                         }
                         "/list_channels" => {
