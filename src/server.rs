@@ -280,6 +280,10 @@ pub fn do_server() {
                                     .filter(|x| x.auth.uuid == uuid)
                                     .collect::<Vec<&mut Client>>();
 
+                                if auth_status.first().is_none() {
+                                    break;
+                                }
+
                                 let auth_status = &auth_status.first().unwrap().auth.auth_status;
 
                                 if let AuthStatus::Authed(uname_) = auth_status.clone() {
@@ -411,7 +415,7 @@ pub fn do_server() {
 
                         if let Some(channel) = server_state.channels.get(client_channel) {
                             for member_uuid in &channel.members {
-                                if *member_uuid != uuid {
+                                /* if *member_uuid != uuid */ {
                                     send(
                                         &mut clients,
                                         &Packet::Message(
