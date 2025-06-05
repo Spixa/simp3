@@ -12,6 +12,7 @@ pub struct NewUser {
     pub hash: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Queryable, QueryableByName)]
 #[diesel(table_name = crate::schema::user)]
 pub struct User {
