@@ -53,6 +53,7 @@ pub fn decode_packet(buf: &[u8], mode: Mode) -> Packet {
         "c" => Packet::Ping,
         "d" => Packet::ChannelJoin(strvec[1].clone(), strvec[2].clone()),
         "e" => Packet::ChannelLeave(strvec[1].clone(), strvec[2].clone()),
+        "f" => Packet::List(strvec[1].clone()),
         _else => Packet::Illegal,
     };
 
@@ -91,6 +92,7 @@ pub fn encode_packet(packet: Packet) -> Vec<u8> {
         Packet::ChannelLeave(username, channel) => {
             format!("e\x01{}\x01{}", username, channel).into_bytes()
         }
+        Packet::List(list) => format!("f\x01{}", list).into_bytes(),
         Packet::_GracefulDisconnect => "7".to_string().into_bytes(),
         Packet::Illegal => panic!("You cannot send an illegal packet!"),
     }

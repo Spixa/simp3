@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-stcp = { git = "https://github.com/vivyir/stcp", rev = "8a4b951" }
+stcp = { git = "https://github.com/vivyir/stcp", rev = "b45dc84" }
 aes-gcm = "0.10"
 clap = { version = "4.5.4", features = ["derive", "cargo", "deprecated"] }
 bincode = "1.3"

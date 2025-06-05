@@ -72,6 +72,7 @@ pub enum Packet {
     Broadcast(String),
     Auth(String, String),
     Ping,
+    List(String),
     ChannelJoin(String, String),
     ChannelLeave(String, String),
     _GracefulDisconnect,

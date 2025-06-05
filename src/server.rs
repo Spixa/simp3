@@ -13,6 +13,7 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use stcp::{bincode, AesPacket, StcpServer};
 use std::env;
+use std::time::Duration;
 use std::{
     collections::HashMap,
     fmt::Error,
@@ -101,54 +102,53 @@ pub fn do_server() {
         if let Ok((mut socket, addr)) = server.listener.accept() {
             println!("{} connected", addr);
 
-            let aes = match server.kex_with_stream(&mut socket) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("error occured during kex with client, killing client (err: {e})");
-                    break;
-                }
-            };
-            println!("KEX completed with {}", socket.peer_addr().unwrap());
-
             // The original ones will be consumed by the Client vector, these are to be used within the client loops
             let _tx = tx.clone();
-            let mut _aes = aes.clone();
-
-            let uuid = Uuid::new_v4();
-
-            {
-                let mut clients = (*clients).lock().unwrap();
-                clients.push(Client {
-                    stream: socket.try_clone().expect("failed to clone client"),
-                    aes,
-                    auth: Auth {
-                        uuid,
-                        auth_status: AuthStatus::Unauth,
-                    },
-                });
-            }
-
-            // Welcome message to the newly joined client
-            send(
-                &mut clients,
-                &Packet::ClientRespone(
-                    String::from_utf8(include_bytes!("config/welcome.txt").to_vec()).unwrap(),
-                ),
-                &uuid,
-            );
-
-            join_or_create(&mut clients, uuid, "auth".to_string(), &mut server_state);
 
             // Seperate thread for the new client
+            // This approach has a disadvantage which is we make a separate thread for any client, be it good or bad
             thread::spawn({
                 let mut clients = Arc::clone(&clients);
-                let server_state = Arc::clone(&server_state);
+                let mut server_state = Arc::clone(&server_state);
+
+                socket.set_read_timeout(Some(Duration::from_secs(5))).ok();
+                socket.set_write_timeout(Some(Duration::from_secs(5))).ok();
+
+                // Key exchange with stream, if all goes well keep the aes key, otherwise break out of the loop, joining the thread.
+                let aes = match server.kex_with_stream(&mut socket) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!(
+                            "error occured during kex with client, killing client (err: {e})"
+                        );
+                        return;
+                    }
+                };
+                // This one will be used by the thread itself, the original is to be moved to the ClientVec
+                let mut _aes = aes.clone();
+                println!("KEX completed with {}", socket.peer_addr().unwrap());
+
+                let uuid = Uuid::new_v4();
+                {
+                    let mut clients = (*clients).lock().unwrap();
+                    clients.push(Client {
+                        stream: socket.try_clone().expect("failed to clone client"),
+                        aes,
+                        auth: Auth {
+                            uuid,
+                            auth_status: AuthStatus::Unauth,
+                        },
+                    });
+                }
+                // Create auth channel if it doesn't exist and move user to #auth
+                join_or_create(&mut clients, uuid, "auth".to_string(), &mut server_state);
+
                 move || loop {
                     let mut buff = [0_u8; MSG_SIZE];
 
                     match socket.read(&mut buff) {
                         Ok(size) => {
-                            // Ensure packet is an encrypted AES packet
+                            // Ensure packet is an encrypted AES packet everytime
                             let packet = match bincode::deserialize::<AesPacket>(&buff[..size]) {
                                 Ok(enc) => {
                                     let dec = enc.decrypt(&mut _aes);
@@ -165,7 +165,7 @@ pub fn do_server() {
                                 }
                             };
 
-                            // Obtain the username
+                            // Obtain username logic
                             let mut uname = String::new();
                             {
                                 let mut clients = (*clients).lock().unwrap();
@@ -178,7 +178,7 @@ pub fn do_server() {
                                     .collect::<Vec<&mut Client>>();
 
                                 // checking whether the client exists or not
-                                if auth_status.first().is_none() {
+                                if auth_status.is_empty() {
                                     break;
                                 }
 
@@ -190,9 +190,11 @@ pub fn do_server() {
                                 }
                             }
 
+                            // This whole if block is for disconnecting a client that sends an illegal packet
                             if packet == Packet::Illegal {
                                 if !uname.is_empty() {
                                     broadcast(&mut clients, Packet::Leave(uname), &uuid);
+                                    sync_list(&mut clients);
                                 }
 
                                 println!(
@@ -227,30 +229,39 @@ pub fn do_server() {
                                 print!("{}", format!("{:?}", packet).cyan());
                                 print!(" from {}", format!("{}", uuid).magenta());
                                 if uname.is_empty() {
-                                    println!();
+                                    println!(" (UNAUTHENTICATED USER)");
                                 } else {
                                     println!(" (AKA: {})", uname.green());
                                 }
                             }
 
-                            // This block contains code for sending the packet over to the receiver channel
-                            // However before that we must check whether the user is authenticated or not
+                            /*
+                                This block contains code for sending the packet over to the receiver channel
+                                However before that we must check whether the user is authenticated or not
+                                TODO: needs to be evaluated if the previous "uname" check is enough for checking
+                                authentication and maybe this whole block is unnecessary
+                            */
                             {
                                 let mut clients = (*clients).lock().unwrap();
 
-                                let auth_status = &clients
+                                let client = &clients
                                     .iter_mut()
                                     .filter(|x| x.auth.uuid == uuid)
                                     .collect::<Vec<&mut Client>>();
 
-                                if auth_status.first().is_none() {
+                                if client.is_empty() {
                                     break;
                                 }
 
-                                let auth_status = &auth_status.first().unwrap().auth.auth_status;
+                                let auth = &client.first().unwrap().auth;
+                                let auth_status = &auth.auth_status;
 
                                 if auth_status.clone() == AuthStatus::Unauth {
                                     if let Packet::Auth(_, _) = packet {
+                                        println!(
+                                            "{} is trying to authenticate",
+                                            auth.uuid.to_string().magenta()
+                                        );
                                     } else {
                                         eprintln!("Previous client did NOT authenticate thereby being kicked from the server");
                                         break;
@@ -280,7 +291,7 @@ pub fn do_server() {
                                     .filter(|x| x.auth.uuid == uuid)
                                     .collect::<Vec<&mut Client>>();
 
-                                if auth_status.first().is_none() {
+                                if auth_status.is_empty() {
                                     break;
                                 }
 
@@ -293,6 +304,7 @@ pub fn do_server() {
 
                             if !uname.is_empty() {
                                 broadcast(&mut clients, Packet::Leave(uname), &uuid);
+                                sync_list(&mut clients);
                             }
 
                             {
@@ -393,7 +405,18 @@ pub fn do_server() {
                                 packet.1.uuid.to_string().magenta(),
                                 username.green()
                             );
+                            send(
+                                &mut clients,
+                                &Packet::ClientRespone(
+                                    String::from_utf8(
+                                        include_bytes!("config/welcome.txt").to_vec(),
+                                    )
+                                    .unwrap(),
+                                ),
+                                &packet.1.uuid,
+                            );
                             broadcast(&mut clients, Packet::Join(username), &Uuid::nil());
+                            sync_list(&mut clients);
                         }
                     }
                 }
@@ -415,7 +438,8 @@ pub fn do_server() {
 
                         if let Some(channel) = server_state.channels.get(client_channel) {
                             for member_uuid in &channel.members {
-                                /* if *member_uuid != uuid */ {
+                                /* if *member_uuid != uuid */
+                                {
                                     send(
                                         &mut clients,
                                         &Packet::Message(
@@ -979,6 +1003,18 @@ fn list_clients(clients: &mut ClientVec) -> Vec<String> {
     names
 }
 
+// TODO: make clients process this packet
+// Useful for gui clients that have a online users sidebar
+fn sync_list(clients: &mut ClientVec) {
+    let list = list_clients(clients);
+    let mut list_str = String::new();
+    println!("syncing {}...", "List".green());
+    for mem in list {
+        list_str.push_str(&(mem.as_str().to_owned() + ","));
+    }
+    broadcast(clients, Packet::List(list_str), &Uuid::nil());
+}
+
 fn list_channels(server_state: &mut ServerStateGuard) -> Vec<String> {
     let server_state = server_state.lock().unwrap();
     let mut channel_names: Vec<String> = Vec::new();
@@ -1006,13 +1042,16 @@ fn kick(clients: &mut ClientVec, who: &Uuid, server_state: &mut ServerStateGuard
         }
     }
     if !uname.is_empty() {
-        println!("{} <client> was kicked.", uname);
+        println!("{} was kicked.", uname.red());
         send(
             clients,
             &Packet::ClientRespone("You were kicked.".to_string()),
             who,
         );
         broadcast(clients, Packet::Leave(uname), who);
+        sync_list(clients);
+    } else {
+        println!("{} was kicked", "unauthed client".red());
     }
 
     if let Some(current_channel) = server_state.client_channels.remove(who) {
